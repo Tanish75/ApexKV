@@ -1,27 +1,34 @@
-#include "include/hash_table.hpp"
 #include <iostream>
-using namespace std;
+#include "hash_table.hpp"
 
+int main() 
+{
+    HashTable ht;
 
-int main() {
-    HashTable ht(5);
+    // Insert some keys (values as int)
+    ht.put("name_code", 1);      // 1 = code for some name
+    ht.put("age", 25);
+    ht.put("city_code", 101);    // 101 = code for some city
 
-    // Test PUT
-    ht.put("name", "Alice");
-    ht.put("age", "25");
-    ht.put("city", "Mumbai");
-    ht.put("name", "Bob");  // update
+    // Update existing key
+    ht.put("name_code", 2);      // update value
 
-    // Test GET
-    cout << "name: " << ht.get("name") << endl;
-    cout << "age: " << ht.get("age") << endl;
-    cout << "city: " << ht.get("city") << endl;
+    // Search
+    std::cout << "name_code: " << ht.get("name_code") << "\n";
+    std::cout << "age: " << ht.get("age") << "\n";
+    std::cout << "city_code: " << ht.get("city_code") << "\n";
+    std::cout << "country: " << ht.get("country") << "\n";  // not found -> -1
 
-    // Test REMOVE
-    ht.remove("age");
+    // Load factor test
+    std::cout << "Initial load factor: " << ht.load_factor() << "\n";
 
-    // Final
-    cout << "Final size: " << ht.getSize() << endl;
+    // Insert enough keys to trigger resize
+    for (int i = 0; i < 50; ++i) 
+    {
+        ht.put("key" + std::to_string(i), i);
+    }
+
+    std::cout << "After 50 inserts, load factor: " << ht.load_factor() << "\n";
 
     return 0;
 }

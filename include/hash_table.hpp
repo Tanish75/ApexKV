@@ -1,34 +1,33 @@
-#pragma once
-#include <vector>
+#ifndef HASH_TABLE_HPP
+#define HASH_TABLE_HPP
+
 #include <string>
-using namespace std;
+#include <forward_list>
+#include <utility>
+#include <functional>
 
-
-// Node structure
-struct Node {
-    string key;
-    string value;
-    Node* next;
-
-    Node(string k, string v);
-};
-
-
-// Hash Table class
 class HashTable {
-    vector<Node*> buckets;
-    int numBuckets;
-    int size;
+private:
+    std::forward_list<std::pair<std::string, int>>* buckets_;
+    size_t capacity_;
+    size_t size_;
+    double max_load_factor_;
 
-    int hash(string key);
+    size_t hash_func(const std::string& key) const {
+        return std::hash<std::string>{}(key) % capacity_;
+    }
 
 public:
-   HashTable(int bucketCount = 10);
+    HashTable();
     ~HashTable();
 
-    void put(string key, string value);
-    string get(string key);
-    bool remove(string key);
-    int getSize();
-    void print();
+    void put(const std::string& key, int value);
+    int get(const std::string& key) const;
+    void remove(const std::string& key);
+    size_t getSize() const;
+
+    double load_factor() const;
+    void rehash();
 };
+
+#endif // HASH_TABLE_HPP
