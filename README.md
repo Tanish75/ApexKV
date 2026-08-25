@@ -60,6 +60,7 @@ g++ -std=c++17 -I include src/hash_table.cpp main.cpp -o apexkv.exe
 
 - Day 1: basic chaining hash table (insert, search).
 - Day 2: added load factor check and resize (rehash).
+- Day 3: added basic tests for insert, search, update, remove, size.
 
 ## Next
 
