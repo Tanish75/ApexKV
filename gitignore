@@ -1,14 +1,9 @@
 # Compiled files
-*.o
 *.exe
-apexkv
+*.o
 
-# IDE files
+# CMake build folder
+build/
+
+# VS Code files
 .vscode/
-.idea/
-*.swp
-*.swo
-
-# OS files
-.DS_Store
-Thumbs.db
