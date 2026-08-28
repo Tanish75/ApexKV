@@ -7,3 +7,5 @@ build/
 
 # VS Code files
 .vscode/
+
+*.log

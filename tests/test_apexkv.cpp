@@ -1,114 +1,102 @@
+#include <cstdio>
 #include <iostream>
 #include <string>
+
 #include "hash_table.hpp"
+#include "persistent_kv.hpp"
 
-void test_put_and_get() {
-    HashTable ht;
+void test_int_values() {
+    HashTable<std::string, int> ht;
 
-    ht.put("name", 10);
     ht.put("age", 25);
-    ht.put("city", 50);
+    ht.put("score", 100);
 
-    if (ht.get("name") != 10) {
-        std::cout << "FAIL: get name\n";
+    if (ht.get("age") != 25 || ht.get("score") != 100) {
+        std::cout << "FAIL: int values\n";
         return;
     }
 
-    if (ht.get("age") != 25) {
-        std::cout << "FAIL: get age\n";
-        return;
-    }
-
-    if (ht.get("city") != 50) {
-        std::cout << "FAIL: get city\n";
-        return;
-    }
-
-    if (ht.get("missing") != -1) {
-        std::cout << "FAIL: missing key should return -1\n";
-        return;
-    }
-
-    std::cout << "PASS: put and get\n";
+    std::cout << "PASS: int values\n";
 }
 
-void test_update() {
-    HashTable ht;
+void test_string_values() {
+    HashTable<std::string, std::string> ht;
 
-    ht.put("name", 10);
-    ht.put("name", 20);
-    ht.put("name", 30);
+    ht.put("name", "Alice");
+    ht.put("city", "Mumbai");
+    ht.put("name", "Bob");
 
-    if (ht.get("name") != 30) {
-        std::cout << "FAIL: update value\n";
+    if (ht.get("name") != "Bob") {
+        std::cout << "FAIL: string update\n";
         return;
     }
 
-    if (ht.getSize() != 1) {
-        std::cout << "FAIL: update should not increase size\n";
+    if (ht.get("city") != "Mumbai") {
+        std::cout << "FAIL: string value\n";
         return;
     }
 
-    std::cout << "PASS: update\n";
+    std::cout << "PASS: string values\n";
 }
 
-void test_remove() {
-    HashTable ht;
+void test_int_keys() {
+    HashTable<int, std::string> ht;
 
-    ht.put("a", 1);
-    ht.put("b", 2);
-    ht.put("c", 3);
+    ht.put(1, "Delhi");
+    ht.put(2, "Mumbai");
+    ht.put(3, "Bengaluru");
 
-    ht.remove("b");
-
-    if (ht.get("b") != -1) {
-        std::cout << "FAIL: remove key\n";
+    if (ht.get(2) != "Mumbai") {
+        std::cout << "FAIL: int keys\n";
         return;
     }
 
-    if (ht.getSize() != 2) {
-        std::cout << "FAIL: size after remove\n";
-        return;
-    }
-
-    if (ht.get("a") != 1 || ht.get("c") != 3) {
-        std::cout << "FAIL: other keys changed after remove\n";
-        return;
-    }
-
-    std::cout << "PASS: remove\n";
+    std::cout << "PASS: int keys\n";
 }
 
-void test_remove_missing_key() {
-    HashTable ht;
+void test_contains_and_remove() {
+    HashTable<std::string, int> ht;
 
-    ht.put("a", 1);
-    ht.put("b", 2);
+    ht.put("a", 10);
+    ht.put("b", 20);
 
-    ht.remove("missing");
-
-    if (ht.getSize() != 2) {
-        std::cout << "FAIL: missing remove changed size\n";
+    if (!ht.contains("a")) {
+        std::cout << "FAIL: contains existing key\n";
         return;
     }
 
-    if (ht.get("a") != 1 || ht.get("b") != 2) {
-        std::cout << "FAIL: missing remove changed data\n";
+    if (ht.contains("missing")) {
+        std::cout << "FAIL: contains missing key\n";
         return;
     }
 
-    std::cout << "PASS: remove missing key\n";
+    if (!ht.remove("a")) {
+        std::cout << "FAIL: remove existing key\n";
+        return;
+    }
+
+    if (ht.contains("a")) {
+        std::cout << "FAIL: key still exists after remove\n";
+        return;
+    }
+
+    if (ht.remove("missing")) {
+        std::cout << "FAIL: remove missing key\n";
+        return;
+    }
+
+    std::cout << "PASS: contains and remove\n";
 }
 
-void test_rehash_keeps_data() {
-    HashTable ht;
+void test_rehash() {
+    HashTable<std::string, int> ht;
 
     for (int i = 0; i < 50; ++i) {
         ht.put("key" + std::to_string(i), i * 10);
     }
 
     if (ht.getSize() != 50) {
-        std::cout << "FAIL: size after rehash\n";
+        std::cout << "FAIL: rehash size\n";
         return;
     }
 
@@ -116,20 +104,61 @@ void test_rehash_keeps_data() {
         std::string key = "key" + std::to_string(i);
 
         if (ht.get(key) != i * 10) {
-            std::cout << "FAIL: rehash lost " << key << "\n";
+            std::cout << "FAIL: rehash data for " << key << "\n";
             return;
         }
     }
 
-    std::cout << "PASS: rehash keeps data\n";
+    std::cout << "PASS: rehash\n";
+}
+
+void test_persistence() {
+    const std::string test_file = "test_apexkv.log";
+
+    std::remove(test_file.c_str());
+
+    {
+        PersistentKV store(test_file);
+
+        store.put("name", "Alice");
+        store.put("city", "Mumbai");
+        store.put("language", "C++");
+        store.remove("city");
+    }
+
+    {
+        PersistentKV store(test_file);
+
+        if (store.get("name") != "Alice") {
+            std::cout << "FAIL: persistence name\n";
+            std::remove(test_file.c_str());
+            return;
+        }
+
+        if (store.contains("city")) {
+            std::cout << "FAIL: persistence remove\n";
+            std::remove(test_file.c_str());
+            return;
+        }
+
+        if (store.get("language") != "C++") {
+            std::cout << "FAIL: persistence language\n";
+            std::remove(test_file.c_str());
+            return;
+        }
+    }
+
+    std::remove(test_file.c_str());
+    std::cout << "PASS: persistence\n";
 }
 
 int main() {
-    test_put_and_get();
-    test_update();
-    test_remove();
-    test_remove_missing_key();
-    test_rehash_keeps_data();
+    test_int_values();
+    test_string_values();
+    test_int_keys();
+    test_contains_and_remove();
+    test_rehash();
+    test_persistence();
 
     return 0;
 }

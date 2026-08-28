@@ -1,67 +1,105 @@
 # ApexKV
 
-A lightweight, in-memory key-value store written in C++17 using a custom hash table with separate chaining. Built to explore hash table internals, dynamic rehashing, and collision management.
+A lightweight, in-memory key-value store written in C++17. Features a generic hash table with separate chaining and a simple append-only log (WAL) for persistent storage.
 
-## Quick Example
+## Features
+
+- **Generic Types:** Templated `HashTable<Key, Value>` supporting standard hashable types (`std::string`, `int`, etc.).
+- **Collision Handling:** Separate chaining using `std::forward_list` for minimal per-node overhead.
+- **Dynamic Resizing:** Automatically doubles bucket capacity and rehashes entries once load factor exceeds `0.75`.
+- **Append-Only Persistence:** `PersistentKV` logs write/delete operations to disk and replays state on startup.
+- **Minimal Footprint:** Header-only core data structure with zero third-party dependencies.
+
+## Usage
+
+### In-Memory Hash Table
 
 ```cpp
 #include "hash_table.hpp"
 #include <iostream>
 
 int main() {
-    HashTable kv;
+    HashTable<std::string, int> scores;
 
-    // Insert & Update
-    kv.put("server_port", 8080);
-    kv.put("max_clients", 100);
-    kv.put("server_port", 9000); // updates existing key
+    scores.put("Alice", 95);
+    scores.put("Bob", 88);
 
-    // Lookup (-1 if key does not exist)
-    std::cout << "Port: " << kv.get("server_port") << "\n";
+    if (scores.contains("Alice")) {
+        std::cout << "Alice: " << scores.get("Alice") << "\n";
+    }
 
-    // Delete
-    kv.remove("max_clients");
-
-    // Current key count
-    std::cout << "Total keys: " << kv.getSize() << "\n";
-
-    return 0;
+    scores.remove("Bob");
+    std::cout << "Remaining: " << scores.getSize() << "\n";
 }
 ```
 
-## Architecture & Internals
+### Persistent Key-Value Store
 
-- **Storage & Chaining:** Buckets are backed by an array of `std::forward_list<std::pair<std::string, int>>`. Collisions are resolved using singly-linked list chaining to minimize memory per node.
-- **Hashing:** Maps keys using `std::hash<std::string> % capacity`.
-- **Dynamic Resizing:** Initial bucket capacity starts at 16 with a maximum load factor threshold of `0.75`. When `size / capacity > 0.75`, the table automatically doubles its bucket count and rehashes all existing entries to maintain $O(1)$ average time complexity.
+```cpp
+#include "persistent_kv.hpp"
+#include <iostream>
+
+int main() {
+    // Opens or creates 'data.log' and recovers existing records
+    PersistentKV db("data.log");
+
+    db.put("session_id", "xyz123");
+    db.put("theme", "dark");
+
+    std::cout << "Theme: " << db.get("theme") << "\n";
+
+    // Deletions append a DEL record to the log
+    db.remove("session_id");
+}
+```
+
+## How It Works
+
+### Hash Table & Rehashing
+- Buckets are stored in a dynamically allocated array of `std::forward_list<std::pair<Key, Value>>`.
+- Key lookups hash the key via `std::hash<Key>{}(key) % capacity`.
+- When `size / capacity > 0.75`, `rehash()` allocates a new table with $2\times$ capacity and redistributes all existing elements.
+
+### Log-Structured Persistence
+`PersistentKV` wraps `HashTable<std::string, std::string>` with an append-only transaction log:
+
+```text
+PUT user_1 Alice
+PUT session_timeout 3600
+DEL session_timeout
+```
+
+- **Writes (`put` / `remove`):** Updates the in-memory hash table and appends a line to disk immediately.
+- **Startup Recovery:** Opens the log file, reads line-by-line from top to bottom, and replays each `PUT` / `DEL` operation to reconstruct the in-memory state.
 
 ## Project Structure
 
 ```text
 ApexKV/
 ├── include/
-│   └── hash_table.hpp      # HashTable class definition
+│   ├── hash_table.hpp      # Templated HashTable implementation
+│   └── persistent_kv.hpp   # Persistent KV store wrapper with disk logging
 ├── src/
-│   └── hash_table.cpp      # HashTable implementation
+│   └── hash_table.cpp      # Translation unit for build systems
 ├── tests/
-│   └── test_apexkv.cpp     # Unit tests and edge case coverage
-├── main.cpp                # Demo application
+│   └── test_apexkv.cpp     # Unit tests covering table & persistence
+├── main.cpp                # Demo entry point
 ├── CMakeLists.txt          # CMake build configuration
 ├── .gitignore
 └── README.md
 ```
 
-## Build & Run
+## Building & Testing
 
 ### Direct Compilation (g++)
 
 ```bash
 # Build & run demo
-g++ -std=c++17 -I include src/hash_table.cpp main.cpp -o apexkv.exe
+g++ -std=c++17 -I include main.cpp -o apexkv.exe
 ./apexkv.exe
 
 # Build & run test suite
-g++ -std=c++17 -I include src/hash_table.cpp tests/test_apexkv.cpp -o test_apexkv.exe
+g++ -std=c++17 -I include tests/test_apexkv.cpp -o test_apexkv.exe
 ./test_apexkv.exe
 ```
 
@@ -77,19 +115,19 @@ cmake --build build
 
 ## Test Suite
 
-The test runner in `tests/test_apexkv.cpp` verifies:
+The test suite in `tests/test_apexkv.cpp` exercises:
 
-- **Basic CRUD:** Insertion and lookups for single and multiple keys.
-- **Key Updates:** Overwriting existing keys without creating duplicate entries or inflating `size`.
-- **Deletions:** Removing keys from the head/middle of a chain, and handling non-existent key deletions gracefully.
-- **Rehashing Integrity:** Inserting 50+ elements to trigger dynamic resizing and verifying that all existing data remains intact after table capacity doubles.
+- **Type Variations:** Validates `HashTable<int, std::string>`, `HashTable<std::string, int>`, and string-to-string mappings.
+- **CRUD Operations:** In-place updates, `contains()` lookups, and removing existing/missing keys.
+- **Dynamic Growth:** Bulk insertion (50+ keys) to ensure zero data loss across rehash boundaries.
+- **Persistence Lifecycle:** Verifies state persistence across distinct `PersistentKV` instances and confirms log replay accuracy after deletions.
 
 ## Roadmap
 
-- [x] Separate chaining hash table with `std::forward_list`
-- [x] Dynamic load factor tracking and $2\times$ table rehashing
-- [x] Delete operation with iterator tracking (`erase_after`)
-- [x] Unit test harness and CMake build configuration
-- [ ] Generic templates for arbitrary key/value types (`HashTable<K, V>`)
-- [ ] Disk persistence (append-only WAL log or snapshots)
-- [ ] Simple CLI / REPL interface
+- [x] Generic `HashTable<Key, Value>` template with `std::forward_list` chaining
+- [x] Dynamic load factor tracking and $2\times$ rehashing
+- [x] Key removal with `erase_after` iterator tracking
+- [x] Append-only WAL persistence and crash recovery
+- [x] Unit test suite with g++ and CMake support
+- [ ] Log compaction / snapshot mechanism to prevent unbounded WAL growth
+- [ ] Throughput benchmarks against `std::unordered_map`
