@@ -139,5 +139,12 @@ The test suite in `tests/test_apexkv.cpp` exercises:
 - [x] Append-only WAL persistence and crash recovery
 - [x] Snapshot support to compact state and reduce log size
 - [x] Basic throughput benchmarks against `std::unordered_map`
-- [ ] Optional: TTL/expiry for keys
-- [ ] Optional: Thread-safe version with fine-grained locking
+- [ ] : TTL/expiry for keys('ll do later)
+- [ ] : Thread-safe version with fine-grained
+locking('ll do later)
+
+
+## verification o/p :
+86c4ed797b6033606985c18ec78829c1d0b74f1e7b50a65688d32cc5edea20a8 *build1.exe
+e2b64dfdfec85fb9be287c6fba900662053ee46c5235036a40d90a5a1205655a *build2.exe
+
