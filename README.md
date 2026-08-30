@@ -8,6 +8,7 @@ A lightweight, in-memory key-value store written in C++17. Features a generic ha
 - **Collision Handling:** Separate chaining using `std::forward_list` for minimal per-node overhead.
 - **Dynamic Resizing:** Automatically doubles bucket capacity and rehashes entries once load factor exceeds `0.75`.
 - **Append-Only Persistence:** `PersistentKV` logs write/delete operations to disk and replays state on startup.
+- **Snapshot Support:** Optional snapshot creation to compact state and reduce log size.
 - **Minimal Footprint:** Header-only core data structure with zero third-party dependencies.
 
 ## Usage
@@ -40,8 +41,8 @@ int main() {
 #include <iostream>
 
 int main() {
-    // Opens or creates 'data.log' and recovers existing records
-    PersistentKV db("data.log");
+    // Opens or creates 'data.log' and 'data.snapshot', recovers existing records
+    PersistentKV db("data.log", "data.snapshot");
 
     db.put("session_id", "xyz123");
     db.put("theme", "dark");
@@ -50,6 +51,9 @@ int main() {
 
     // Deletions append a DEL record to the log
     db.remove("session_id");
+
+    // Optionally create a snapshot to compact state
+    db.save_snapshot();
 }
 ```
 
@@ -58,7 +62,7 @@ int main() {
 ### Hash Table & Rehashing
 - Buckets are stored in a dynamically allocated array of `std::forward_list<std::pair<Key, Value>>`.
 - Key lookups hash the key via `std::hash<Key>{}(key) % capacity`.
-- When `size / capacity > 0.75`, `rehash()` allocates a new table with $2\times$ capacity and redistributes all existing elements.
+- When `size / capacity > 0.75`, `rehash()` allocates a new table with 2× capacity and redistributes all existing elements.
 
 ### Log-Structured Persistence
 `PersistentKV` wraps `HashTable<std::string, std::string>` with an append-only transaction log:
@@ -70,7 +74,8 @@ DEL session_timeout
 ```
 
 - **Writes (`put` / `remove`):** Updates the in-memory hash table and appends a line to disk immediately.
-- **Startup Recovery:** Opens the log file, reads line-by-line from top to bottom, and replays each `PUT` / `DEL` operation to reconstruct the in-memory state.
+- **Startup Recovery:** Opens the log file (and snapshot if present), reads line-by-line from top to bottom, and replays each `PUT` / `DEL` operation to reconstruct the in-memory state.
+- **Snapshots:** `save_snapshot()` writes the current key-value pairs to a snapshot file; on next startup, the snapshot is loaded first, then newer log entries are replayed.
 
 ## Project Structure
 
@@ -101,6 +106,10 @@ g++ -std=c++17 -I include main.cpp -o apexkv.exe
 # Build & run test suite
 g++ -std=c++17 -I include tests/test_apexkv.cpp -o test_apexkv.exe
 ./test_apexkv.exe
+
+# Build & run benchmark
+g++ -std=c++17 -I include tests/benchmark_apexkv.cpp -o benchmark_apexkv.exe
+./benchmark_apexkv.exe
 ```
 
 ### Using CMake
@@ -125,9 +134,10 @@ The test suite in `tests/test_apexkv.cpp` exercises:
 ## Roadmap
 
 - [x] Generic `HashTable<Key, Value>` template with `std::forward_list` chaining
-- [x] Dynamic load factor tracking and $2\times$ rehashing
+- [x] Dynamic load factor tracking and 2× rehashing
 - [x] Key removal with `erase_after` iterator tracking
 - [x] Append-only WAL persistence and crash recovery
-- [x] Unit test suite with g++ and CMake support
-- [ ] Log compaction / snapshot mechanism to prevent unbounded WAL growth
-- [ ] Throughput benchmarks against `std::unordered_map`
+- [x] Snapshot support to compact state and reduce log size
+- [x] Basic throughput benchmarks against `std::unordered_map`
+- [ ] Optional: TTL/expiry for keys
+- [ ] Optional: Thread-safe version with fine-grained locking

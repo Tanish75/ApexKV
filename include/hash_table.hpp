@@ -2,6 +2,7 @@
 #define HASH_TABLE_HPP
 
 #include <cstddef>
+#include <unordered_map>
 #include <forward_list>
 #include <functional>
 #include <utility>
@@ -116,6 +117,14 @@ public:
     double load_factor() const {
         return static_cast<double>(size_) / static_cast<double>(capacity_);
     }
+
+ void collect_all_into(std::unordered_map<Key, Value>& out) const {
+    for (std::size_t i = 0; i < capacity_; ++i) {
+        for (const auto& pair : buckets_[i]) {
+            out[pair.first] = pair.second;
+        }
+    }
+}
 };
 
 #endif

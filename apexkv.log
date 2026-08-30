@@ -1,6 +1,1 @@
-PUT name Alice
-PUT city Mumbai
-PUT language C++
-PUT name Alice
-PUT city Mumbai
-PUT language C++
+DEL city
