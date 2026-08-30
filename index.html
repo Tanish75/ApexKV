@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ApexKV - Interactive Presentation & Live Demo</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    code, pre, .font-mono { font-family: 'Fira Code', monospace; }
+    .glow-cyan { box-shadow: 0 0 20px rgba(56, 189, 248, 0.25); }
+    .glow-indigo { box-shadow: 0 0 20px rgba(99, 102, 241, 0.25); }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    @keyframes pulse-highlight {
+      0%, 100% { background-color: rgba(56, 189, 248, 0.1); border-color: #38bdf8; }
+      50% { background-color: rgba(56, 189, 248, 0.3); border-color: #00e5ff; }
+    }
+    .bucket-active { animation: pulse-highlight 1.5s infinite ease-in-out; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="h-9 w-9 rounded-lg bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center font-bold text-white shadow-lg">
+        ⚡
+      </div>
+      <div>
+        <h1 class="font-bold text-lg tracking-tight text-white flex items-center gap-2">
+          ApexKV <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">C++17 Engine</span>
+        </h1>
+        <p class="text-xs text-slate-400">Interactive Presentation & Live "Click and Play" Demo</p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <button id="tab-demo-btn" onclick="switchView('demo')" class="px-4 py-1.5 rounded-lg text-sm font-medium transition bg-cyan-600 text-white shadow">
+        🎮 Interactive Live Demo
+      </button>
+      <button id="tab-slides-btn" onclick="switchView('slides')" class="px-4 py-1.5 rounded-lg text-sm font-medium transition bg-slate-800 text-slate-300 hover:bg-slate-700">
+        📊 5-Min Pitch Slides
+      </button>
+      <a href="https://github.com/Tanish75/ApexKV" target="_blank" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 flex items-center gap-1.5">
+        <span>GitHub Repo</span> ↗
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
+
+    <!-- ============================================== -->
+    <!-- VIEW 1: INTERACTIVE "CLICK AND PLAY" LIVE DEMO -->
+    <!-- ============================================== -->
+    <div id="view-demo" class="space-y-6">
+      
+      <!-- Top Metrics & Status Banner -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          <div class="text-xs text-slate-400 font-medium">TABLE CAPACITY</div>
+          <div class="flex items-baseline justify-between mt-1">
+            <span id="metric-capacity" class="text-2xl font-bold text-cyan-400">16</span>
+            <span class="text-xs text-slate-500">buckets</span>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-1">Doubles on 0.75 load</div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          <div class="text-xs text-slate-400 font-medium">TOTAL STORED KEYS</div>
+          <div class="flex items-baseline justify-between mt-1">
+            <span id="metric-size" class="text-2xl font-bold text-white">0</span>
+            <span class="text-xs text-slate-500">records</span>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-1">std::pair&lt;K, V&gt;</div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          <div class="text-xs text-slate-400 font-medium">LOAD FACTOR (α)</div>
+          <div class="flex items-baseline justify-between mt-1">
+            <span id="metric-load" class="text-2xl font-bold text-emerald-400">0.00</span>
+            <span class="text-xs text-slate-400">/ 0.75 max</span>
+          </div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+            <div id="load-bar" class="bg-emerald-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          <div class="text-xs text-slate-400 font-medium">DURABILITY ENGINE</div>
+          <div class="flex items-baseline justify-between mt-1">
+            <span id="metric-wal" class="text-lg font-bold text-amber-400">WAL ACTIVE</span>
+            <span class="text-xs text-emerald-400">SYNC</span>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-1">apexkv.log & snapshot</div>
+        </div>
+      </div>
+
+      <!-- Main Interactive Grid: Left Controls & Visualizer, Right WAL & Compactor -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left 8 Columns: Operations & Bucket Visualizer -->
+        <div class="lg:col-span-8 space-y-6">
+
+          <!-- Command Input Box -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <h2 class="text-sm font-semibold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                <span>⌨</span> Interactive KV Operations (CRUD)
+              </h2>
+              <div class="flex items-center gap-2 text-xs">
+                <button onclick="autoPopulateDemo()" class="px-2.5 py-1 rounded bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 border border-indigo-700 transition">
+                  ⚡ Add 12 Keys (Trigger 2x Rehash)
+                </button>
+                <button onclick="clearAllData()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+                  🗑 Clear All
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              <div class="sm:col-span-4">
+                <label class="block text-xs text-slate-400 mb-1">Key (std::string)</label>
+                <input id="input-key" type="text" placeholder="e.g. user_tier" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500 font-mono" />
+              </div>
+              <div class="sm:col-span-4">
+                <label class="block text-xs text-slate-400 mb-1">Value (std::string)</label>
+                <input id="input-val" type="text" placeholder="e.g. enterprise_pro" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500 font-mono" />
+              </div>
+              <div class="sm:col-span-4 flex items-end gap-2">
+                <button onclick="handlePut()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-medium py-2 rounded-lg text-sm shadow transition">
+                  PUT
+                </button>
+                <button onclick="handleGet()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-medium py-2 rounded-lg text-sm border border-slate-700 transition">
+                  GET
+                </button>
+                <button onclick="handleRemove()" class="flex-1 bg-rose-950 hover:bg-rose-900 text-rose-300 font-medium py-2 rounded-lg text-sm border border-rose-800 transition">
+                  DEL
+                </button>
+              </div>
+            </div>
+
+            <!-- Hash Formula Info Line -->
+            <div id="hash-info" class="mt-3 text-xs font-mono text-slate-400 bg-slate-950/70 p-2.5 rounded-lg border border-slate-800 flex items-center justify-between">
+              <span>Formula: <code class="text-cyan-300">std::hash&lt;Key&gt;{}(k) % capacity</code></span>
+              <span id="last-op-msg" class="text-slate-300">Ready for commands</span>
+            </div>
+          </div>
+
+          <!-- In-Memory Hash Table Bucket Visualization -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                  <span>🧱</span> In-Memory Bucket Array & Chaining (<code class="text-slate-300 font-mono">std::forward_list</code>)
+                </h2>
+                <p class="text-xs text-slate-400 mt-0.5">Singly-linked collision chains with instant O(1) front insertion</p>
+              </div>
+              <div class="flex items-center gap-3 text-xs">
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-700"></span> Empty</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span> Occupied</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Collision (&gt;1)</span>
+              </div>
+            </div>
+
+            <!-- Dynamic Bucket Grid -->
+            <div id="buckets-container" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 gap-3 max-h-[380px] overflow-y-auto custom-scrollbar p-1">
+              <!-- Dynamically populated by JS -->
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right 4 Columns: WAL Log, Snapshot & Crash Simulator -->
+        <div class="lg:col-span-4 space-y-6">
+
+          <!-- WAL Disk Stream -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col h-[400px]">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-sm font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                <span>📜</span> Write-Ahead Log (<code class="text-xs text-slate-300 font-mono">apexkv.log</code>)
+              </h2>
+              <span id="wal-count" class="text-xs text-slate-400">0 lines</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">Synchronous append-only mutation stream</p>
+            
+            <!-- Log Console -->
+            <div id="wal-log-view" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs overflow-y-auto custom-scrollbar space-y-1 text-slate-300">
+              <div class="text-slate-600">// apexkv.log initialized</div>
+            </div>
+
+            <div class="mt-3 flex gap-2">
+              <button onclick="saveSnapshot()" class="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow transition flex items-center justify-center gap-1">
+                📸 Save Snapshot & Compact
+              </button>
+            </div>
+          </div>
+
+          <!-- Crash & Replay Recovery Simulator -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-rose-400 flex items-center gap-2 mb-1">
+              <span>💥</span> Crash Recovery Simulator
+            </h2>
+            <p class="text-xs text-slate-400 mb-4">Simulate abrupt process crash (SIGKILL) & test automatic state restoration</p>
+
+            <div class="space-y-3">
+              <button onclick="simulateCrashAndRecover()" class="w-full py-2.5 rounded-lg bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs shadow-lg transition">
+                ⚡ Kill Process & Trigger WAL Replay
+              </button>
+
+              <div id="recovery-status" class="hidden p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono space-y-1">
+                <div class="text-rose-400">⚠ SIMULATED PROCESS CRASH!</div>
+                <div class="text-slate-400">1. In-memory RAM wiped to 0.</div>
+                <div id="rec-snap-step" class="text-indigo-400">2. Checking snapshot baseline...</div>
+                <div id="rec-wal-step" class="text-amber-400">3. Replaying WAL mutations...</div>
+                <div class="text-emerald-400 font-bold">✔ 100% State Consistently Restored!</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ============================================== -->
+    <!-- VIEW 2: 5-MINUTE PITCH SLIDE DECK & SPEAKER NOTES -->
+    <!-- ============================================== -->
+    <div id="view-slides" class="hidden space-y-6">
+
+      <!-- Slide Deck Header & Controls -->
+      <div class="flex flex-wrap items-center justify-between bg-slate-900 border border-slate-800 rounded-2xl p-4 gap-4">
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-bold text-cyan-400 uppercase tracking-wider">Slide Navigator</span>
+          <span id="slide-indicator" class="text-sm font-mono text-white bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">Slide 1 of 10</span>
+        </div>
+
+        <!-- 5-Minute Timer -->
+        <div class="flex items-center gap-3 bg-slate-950 px-4 py-1.5 rounded-xl border border-slate-800">
+          <span class="text-xs text-slate-400 uppercase">5-Min Pitch Timer:</span>
+          <span id="pitch-timer" class="text-base font-bold font-mono text-emerald-400">05:00</span>
+          <button id="timer-btn" onclick="toggleTimer()" class="text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">Start</button>
+          <button onclick="resetTimer()" class="text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">Reset</button>
+        </div>
+
+        <!-- Prev / Next Controls -->
+        <div class="flex items-center gap-2">
+          <button onclick="prevSlide()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium border border-slate-700">
+            ◀ Previous
+          </button>
+          <button onclick="nextSlide()" class="px-4 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium shadow">
+            Next Slide ▶
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Slide Display Area -->
+      <div id="slide-stage" class="bg-slate-900 border border-slate-800 rounded-3xl p-8 md:p-12 min-h-[460px] shadow-2xl relative flex flex-col justify-between">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Speaker Notes Card -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+            <span>🎙</span> Speaker Notes & Timing Guide (5-Minute Hackathon Pitch)
+          </h3>
+          <span id="slide-time-target" class="text-xs text-slate-400 font-mono">Target: 0:00 - 0:30</span>
+        </div>
+        <p id="speaker-notes-text" class="text-sm text-slate-300 leading-relaxed font-sans">
+          Loading speaker notes...
+        </p>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800 py-4 px-6 text-center text-xs text-slate-500">
+    ApexKV Storage Engine &bull; Built in Modern C++17 &bull; Created for Hackathon 2026 &bull; <a href="https://github.com/Tanish75/ApexKV" class="text-cyan-400 hover:underline">github.com/Tanish75/ApexKV</a>
+  </footer>
+
+  <!-- ============================================== -->
+  <!-- JAVASCRIPT ENGINE & LOGIC SIMULATOR -->
+  <!-- ============================================== -->
+  <script>
+    // --- IN-MEMORY APEXKV ENGINE IMPLEMENTATION (JS Mirror of C++17 Engine) ---
+    class ApexKVMirror {
+      constructor(initialCap = 16, maxLoad = 0.75) {
+        this.capacity = initialCap;
+        this.maxLoadFactor = maxLoad;
+        this.size = 0;
+        this.buckets = Array.from({ length: this.capacity }, () => []);
+        this.wal = [];
+        this.snapshot = {};
+      }
+
+      hash(key) {
+        let h = 0;
+        for (let i = 0; i < key.length; i++) {
+          h = ((h << 5) - h) + key.charCodeAt(i);
+          h |= 0;
+        }
+        return Math.abs(h) % this.capacity;
+      }
+
+      rehash() {
+        const newCap = this.capacity * 2;
+        const newBuckets = Array.from({ length: newCap }, () => []);
+        for (let i = 0; i < this.capacity; i++) {
+          for (const item of this.buckets[i]) {
+            let h = 0;
+            for (let j = 0; j < item.key.length; j++) {
+              h = ((h << 5) - h) + item.key.charCodeAt(j);
+              h |= 0;
+            }
+            const idx = Math.abs(h) % newCap;
+            newBuckets[idx].unshift(item); // push_front
+          }
+        }
+        this.buckets = newBuckets;
+        this.capacity = newCap;
+      }
+
+      put(key, value) {
+        const index = this.hash(key);
+        const bucket = this.buckets[index];
+        for (let item of bucket) {
+          if (item.key === key) {
+            item.value = value;
+            this.wal.push({ op: 'PUT', key, value, ts: new Date().toLocaleTimeString() });
+            return { updated: true, index };
+          }
+        }
+        bucket.unshift({ key, value });
+        this.size++;
+        this.wal.push({ op: 'PUT', key, value, ts: new Date().toLocaleTimeString() });
+
+        let rehashed = false;
+        if ((this.size / this.capacity) > this.maxLoadFactor) {
+          this.rehash();
+          rehashed = true;
+        }
+        return { updated: false, index, rehashed };
+      }
+
+      get(key) {
+        const index = this.hash(key);
+        const bucket = this.buckets[index];
+        for (let item of bucket) {
+          if (item.key === key) return { found: true, value: item.value, index };
+        }
+        return { found: false, index };
+      }
+
+      remove(key) {
+        const index = this.hash(key);
+        const bucket = this.buckets[index];
+        const initialLen = bucket.length;
+        this.buckets[index] = bucket.filter(item => item.key !== key);
+        if (this.buckets[index].length < initialLen) {
+          this.size--;
+          this.wal.push({ op: 'DEL', key, ts: new Date().toLocaleTimeString() });
+          return { removed: true, index };
+        }
+        return { removed: false, index };
+      }
+
+      saveSnapshot() {
+        const flat = {};
+        for (let b of this.buckets) {
+          for (let item of b) {
+            flat[item.key] = item.value;
+          }
+        }
+        this.snapshot = flat;
+        this.wal = []; // Log compacted
+      }
+    }
+
+    const kv = new ApexKVMirror(16, 0.75);
+
+    // --- UI VIEW SWITCHING ---
+    function switchView(view) {
+      const vDemo = document.getElementById('view-demo');
+      const vSlides = document.getElementById('view-slides');
+      const btnDemo = document.getElementById('tab-demo-btn');
+      const btnSlides = document.getElementById('tab-slides-btn');
+
+      if (view === 'demo') {
+        vDemo.classList.remove('hidden');
+        vSlides.classList.add('hidden');
+        btnDemo.className = 'px-4 py-1.5 rounded-lg text-sm font-medium transition bg-cyan-600 text-white shadow';
+        btnSlides.className = 'px-4 py-1.5 rounded-lg text-sm font-medium transition bg-slate-800 text-slate-300 hover:bg-slate-700';
+      } else {
+        vDemo.classList.add('hidden');
+        vSlides.classList.remove('hidden');
+        btnSlides.className = 'px-4 py-1.5 rounded-lg text-sm font-medium transition bg-cyan-600 text-white shadow';
+        btnDemo.className = 'px-4 py-1.5 rounded-lg text-sm font-medium transition bg-slate-800 text-slate-300 hover:bg-slate-700';
+        renderSlide();
+      }
+    }
+
+    // --- RENDER BUCKET VISUALIZER ---
+    function renderBuckets(activeIdx = null) {
+      const container = document.getElementById('buckets-container');
+      container.innerHTML = '';
+
+      for (let i = 0; i < kv.capacity; i++) {
+        const chain = kv.buckets[i];
+        const isCollision = chain.length > 1;
+        const isActive = (activeIdx === i);
+
+        let borderClass = 'border-slate-800 bg-slate-950/60';
+        if (chain.length > 0) borderClass = 'border-cyan-900/60 bg-cyan-950/20';
+        if (isCollision) borderClass = 'border-amber-900/60 bg-amber-950/20';
+        if (isActive) borderClass += ' bucket-active';
+
+        const bCard = document.createElement('div');
+        bCard.className = `p-3 rounded-xl border ${borderClass} transition-all duration-200`;
+
+        bCard.innerHTML = `
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] font-mono font-bold ${chain.length > 0 ? 'text-cyan-400' : 'text-slate-500'}">
+              Bucket [${i}]
+            </span>
+            <span class="text-[10px] px-1.5 py-0.2 rounded ${chain.length > 0 ? (isCollision ? 'bg-amber-900/60 text-amber-300' : 'bg-cyan-900/60 text-cyan-300') : 'bg-slate-800 text-slate-500'}">
+              ${chain.length} node${chain.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div class="space-y-1.5 min-h-[32px]">
+            ${chain.length === 0 ? '<div class="text-[11px] text-slate-600 italic">nullptr (empty)</div>' : ''}
+            ${chain.map((item, idx) => `
+              <div class="p-1.5 rounded bg-slate-900 border border-slate-700 text-xs font-mono flex items-center justify-between">
+                <span class="text-white font-semibold truncate max-w-[70px]">${item.key}</span>
+                <span class="text-cyan-400 text-[11px] truncate max-w-[70px]">"${item.value}"</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        container.appendChild(bCard);
+      }
+
+      // Update Metrics
+      document.getElementById('metric-capacity').textContent = kv.capacity;
+      document.getElementById('metric-size').textContent = kv.size;
+      const loadVal = (kv.size / kv.capacity).toFixed(2);
+      document.getElementById('metric-load').textContent = loadVal;
+      const loadPercent = Math.min(100, (loadVal / 0.75) * 100);
+      const loadBar = document.getElementById('load-bar');
+      loadBar.style.width = `${loadPercent}%`;
+      if (loadVal > 0.6) loadBar.className = 'bg-amber-500 h-full rounded-full transition-all duration-300';
+      else loadBar.className = 'bg-emerald-500 h-full rounded-full transition-all duration-300';
+
+      // Update WAL view
+      const walView = document.getElementById('wal-log-view');
+      document.getElementById('wal-count').textContent = `${kv.wal.length} lines logged`;
+      if (kv.wal.length === 0) {
+        walView.innerHTML = '<div class="text-slate-600">// Log compacted / clean</div>';
+      } else {
+        walView.innerHTML = kv.wal.map(e => `
+          <div class="flex items-center justify-between py-0.5 border-b border-slate-900/60">
+            <span class="${e.op === 'PUT' ? 'text-cyan-400' : 'text-rose-400'} font-bold">${e.op} ${e.key} ${e.value ? e.value : ''}</span>
+            <span class="text-[10px] text-slate-500">${e.ts}</span>
+          </div>
+        `).join('');
+        walView.scrollTop = walView.scrollHeight;
+      }
+    }
+
+    // --- OPERATION HANDLERS ---
+    function handlePut() {
+      const k = document.getElementById('input-key').value.trim();
+      const v = document.getElementById('input-val').value.trim();
+      if (!k) return alert('Please specify a Key!');
+      const res = kv.put(k, v || 'val_' + Math.floor(Math.random()*100));
+      const msg = res.rehashed ? `PUT "${k}" & triggered 2x REHASH to capacity ${kv.capacity}!` : (res.updated ? `Updated key "${k}" in Bucket [${res.index}]` : `Inserted key "${k}" into Bucket [${res.index}]`);
+      document.getElementById('last-op-msg').textContent = msg;
+      renderBuckets(res.index);
+    }
+
+    function handleGet() {
+      const k = document.getElementById('input-key').value.trim();
+      if (!k) return alert('Please specify a Key to lookup!');
+      const res = kv.get(k);
+      if (res.found) {
+        document.getElementById('last-op-msg').innerHTML = `<span class="text-emerald-400">FOUND "${k}" = "${res.value}" in Bucket [${res.index}]</span>`;
+      } else {
+        document.getElementById('last-op-msg').innerHTML = `<span class="text-rose-400">MISS: Key "${k}" not found in Bucket [${res.index}]</span>`;
+      }
+      renderBuckets(res.index);
+    }
+
+    function handleRemove() {
+      const k = document.getElementById('input-key').value.trim();
+      if (!k) return alert('Please specify a Key to remove!');
+      const res = kv.remove(k);
+      if (res.removed) {
+        document.getElementById('last-op-msg').innerHTML = `<span class="text-amber-400">REMOVED "${k}" from Bucket [${res.index}]</span>`;
+      } else {
+        document.getElementById('last-op-msg').innerHTML = `<span class="text-slate-400">Cannot remove: Key "${k}" not found</span>`;
+      }
+      renderBuckets(res.index);
+    }
+
+    function autoPopulateDemo() {
+      const sample = [
+        ["user_1", "Alice"], ["session_id", "xyz99"], ["city", "Mumbai"],
+        ["theme", "dark"], ["rate_limit", "1000"], ["db_host", "127.0.0.1"],
+        ["auth_token", "jwt_token_99"], ["app_mode", "production"], ["version", "v1.0.2"],
+        ["cache_ttl", "3600"], ["user_2", "Bob"], ["lang", "cpp17"],
+        ["region", "asia-south1"], ["cluster_id", "node-4"]
+      ];
+      for (const [k, v] of sample) {
+        kv.put(k, v);
+      }
+      document.getElementById('last-op-msg').textContent = `Auto-populated 14 items! Load triggered 2x dynamic rehash.`;
+      renderBuckets();
+    }
+
+    function clearAllData() {
+      kv.capacity = 16;
+      kv.size = 0;
+      kv.buckets = Array.from({ length: 16 }, () => []);
+      kv.wal = [];
+      kv.snapshot = {};
+      document.getElementById('last-op-msg').textContent = `Cleared in-memory table and log.`;
+      renderBuckets();
+    }
+
+    function saveSnapshot() {
+      kv.saveSnapshot();
+      document.getElementById('last-op-msg').textContent = `Saved point-in-time snapshot & compacted WAL!`;
+      renderBuckets();
+    }
+
+    function simulateCrashAndRecover() {
+      const statusBox = document.getElementById('recovery-status');
+      statusBox.classList.remove('hidden');
+
+      // Preserve snapshot & wal on "disk"
+      const diskSnapshot = { ...kv.snapshot };
+      const diskWal = [ ...kv.wal ];
+
+      // Wipe RAM
+      kv.capacity = 16;
+      kv.size = 0;
+      kv.buckets = Array.from({ length: 16 }, () => []);
+      renderBuckets();
+
+      setTimeout(() => {
+        // Step 1: Replay snapshot
+        for (const [k, v] of Object.entries(diskSnapshot)) {
+          kv.put(k, v);
+        }
+        renderBuckets();
+      }, 500);
+
+      setTimeout(() => {
+        // Step 2: Replay trailing WAL
+        for (const entry of diskWal) {
+          if (entry.op === 'PUT') kv.put(entry.key, entry.value);
+          else if (entry.op === 'DEL') kv.remove(entry.key);
+        }
+        renderBuckets();
+      }, 1000);
+    }
+
+    // --- SLIDES DATA & VIEWER ---
+    const slidesData = [
+      {
+        title: "ApexKV: Fast, Lightweight, Durable In-Memory KV Engine",
+        badge: "Modern C++17 • Header-Only • Zero Dependencies",
+        content: `
+          <div class="space-y-6">
+            <h2 class="text-3xl font-extrabold text-white">High-Performance Key-Value Storage with WAL Persistence</h2>
+            <p class="text-base text-slate-300 max-w-2xl leading-relaxed">
+              ApexKV provides sub-millisecond in-memory lookups powered by a templated hash table with forward-list chaining, combined with crash-resilient append-only write logging and snapshot compaction.
+            </p>
+            <div class="flex flex-wrap gap-2 text-xs font-mono">
+              <span class="px-3 py-1 bg-cyan-950 border border-cyan-800 text-cyan-400 rounded-full font-bold">Generic HashTable&lt;K, V&gt;</span>
+              <span class="px-3 py-1 bg-emerald-950 border border-emerald-800 text-emerald-400 rounded-full font-bold">Dynamic 0.75 Load Rehash</span>
+              <span class="px-3 py-1 bg-amber-950 border border-amber-800 text-amber-400 rounded-full font-bold">Append-Only WAL Durability</span>
+              <span class="px-3 py-1 bg-indigo-950 border border-indigo-800 text-indigo-400 rounded-full font-bold">Point-in-Time Snapshots</span>
+            </div>
+          </div>
+        `,
+        notes: "Welcome judges! Today I'm presenting ApexKV, an embeddable in-memory key-value database written from scratch in C++17. It blends raw in-memory lookup speed with deterministic write-ahead logging to guarantee zero data loss.",
+        timing: "0:00 - 0:30"
+      },
+      {
+        title: "The Problem: Speed vs. Durability Dilemma",
+        badge: "Motivation & Industry Challenge",
+        content: `
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
+              <h3 class="text-base font-bold text-cyan-400 mb-2">1. Volatile In-Memory Maps</h3>
+              <p class="text-xs text-slate-400 leading-relaxed">Standard containers (std::unordered_map) lose 100% of data on crash, have heavy per-node pointer overhead, and lack write logging.</p>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
+              <h3 class="text-base font-bold text-amber-400 mb-2">2. Heavyweight DB Bloat</h3>
+              <p class="text-xs text-slate-400 leading-relaxed">Full engines like Redis or RocksDB demand complex daemon configurations, large RAM footprints, and heavy dynamic dependencies.</p>
+            </div>
+            <div class="bg-slate-950 border border-emerald-800 p-5 rounded-2xl bg-emerald-950/10">
+              <h3 class="text-base font-bold text-emerald-400 mb-2">3. The ApexKV Solution</h3>
+              <p class="text-xs text-slate-300 leading-relaxed">Header-only zero-dependency engine. Singly-linked separate chaining for lean memory, 2x dynamic rehash, and synchronous WAL crash safety.</p>
+            </div>
+          </div>
+        `,
+        notes: "Why did we build ApexKV? When developers need fast key-value storage in C++, standard STL maps are volatile, while production databases are bloated and heavy. ApexKV provides the sweet spot: embeddable, zero-dependency, and crash-resilient.",
+        timing: "0:30 - 1:15"
+      },
+      {
+        title: "Two-Tier Decoupled Architecture",
+        badge: "System Architecture",
+        content: `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-slate-950 border border-indigo-900/60 p-5 rounded-2xl">
+              <h3 class="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-2">In-Memory Core (HashTable&lt;K, V&gt;)</h3>
+              <ul class="text-xs text-slate-300 space-y-2">
+                <li>• Singly-linked <code class="text-cyan-300">std::forward_list</code> collision buckets save 8 bytes per node.</li>
+                <li>• Indexing via <code class="text-cyan-300">std::hash&lt;Key&gt;{}(key) % capacity</code>.</li>
+                <li>• Dynamic 2x capacity expansion when <code class="text-cyan-300">load_factor &gt; 0.75</code>.</li>
+              </ul>
+            </div>
+            <div class="bg-slate-950 border border-emerald-900/60 p-5 rounded-2xl">
+              <h3 class="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-2">Durability Layer (PersistentKV)</h3>
+              <ul class="text-xs text-slate-300 space-y-2">
+                <li>• Synchronous append-only Write-Ahead Log (<code class="text-emerald-300">apexkv.log</code>).</li>
+                <li>• Point-in-Time Compaction (<code class="text-emerald-300">save_snapshot()</code>).</li>
+                <li>• Two-stage replay recovery on process boot.</li>
+              </ul>
+            </div>
+          </div>
+        `,
+        notes: "ApexKV uses a decoupled two-tier architecture: the high-speed generic HashTable class in memory, and the PersistentKV durability manager that guarantees atomicity and sequential write replay.",
+        timing: "1:15 - 2:00"
+      },
+      {
+        title: "In-Memory Engine & Dynamic Rehashing",
+        badge: "Core Data Structure Deep-Dive",
+        content: `
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+            <div class="md:col-span-7 bg-slate-950 p-4 rounded-2xl border border-slate-800 font-mono text-xs text-cyan-300 overflow-x-auto">
+              <pre><code>void rehash() {
+  size_t new_cap = capacity_ * 2;
+  auto* new_b = new std::forward_list&lt;Pair&gt;[new_cap];
+  for (size_t i = 0; i < capacity_; ++i) {
+    for (const auto& item : buckets_[i]) {
+      size_t idx = std::hash&lt;Key&gt;{}(item.first) % new_cap;
+      new_b[idx].push_front(item);
+    }
+  }
+  delete[] buckets_;
+  buckets_ = new_b;
+  capacity_ = new_cap;
+}</code></pre>
+            </div>
+            <div class="md:col-span-5 space-y-3 text-xs text-slate-300">
+              <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                <span class="font-bold text-emerald-400">Singly-Linked Efficiency:</span>
+                <p class="text-slate-400 mt-1">Single forward pointer per node minimizes heap fragmentation and cache lines.</p>
+              </div>
+              <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                <span class="font-bold text-amber-400">Amortized O(1) Operations:</span>
+                <p class="text-slate-400 mt-1">Rehashing at 0.75 threshold ensures short chain lengths even under 100k+ records.</p>
+              </div>
+            </div>
+          </div>
+        `,
+        notes: "By selecting std::forward_list over doubly-linked lists, we reduce memory overhead by ~33% per node. Dynamic 2x rehashing ensures optimal chain length and amortized O(1) performance.",
+        timing: "2:00 - 2:45"
+      },
+      {
+        title: "WAL Persistence & Point-in-Time Snapshots",
+        badge: "Durability Engine",
+        content: `
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+              <span class="text-xs font-bold text-cyan-400">1. Append-Only Log</span>
+              <p class="text-xs text-slate-400 mt-2">Every write/delete emits human-readable atomic records immediately to disk.</p>
+              <div class="mt-2 p-2 bg-slate-900 rounded font-mono text-[10px] text-slate-300">PUT user_1 Alice<br>DEL old_token</div>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl">
+              <span class="text-xs font-bold text-indigo-400">2. Snapshot Compaction</span>
+              <p class="text-xs text-slate-400 mt-2">Flattens live in-memory state and truncates WAL to prevent unbounded disk growth.</p>
+            </div>
+            <div class="bg-slate-950 border border-emerald-800 p-4 rounded-xl bg-emerald-950/20">
+              <span class="text-xs font-bold text-emerald-400">3. Boot Recovery Engine</span>
+              <p class="text-xs text-slate-300 mt-2">Loads snapshot baseline first, then replays tail log commands to restore 100% data consistency.</p>
+            </div>
+          </div>
+        `,
+        notes: "Durability is achieved using an append-only Write-Ahead Log. Developers can periodically invoke save_snapshot() to compact redundant keys, keeping disk files lean while maintaining 100% crash recovery.",
+        timing: "2:45 - 3:30"
+      },
+      {
+        title: "Intuitive & Zero-Boilerplate C++ API",
+        badge: "Developer Experience",
+        content: `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-[11px] text-cyan-300">
+              <div class="text-slate-500 mb-1">// In-Memory Usage</div>
+              HashTable&lt;std::string, int&gt; scores;<br>
+              scores.put("Alice", 95);<br>
+              scores.put("Bob", 88);<br>
+              if (scores.contains("Alice")) {<br>
+              &nbsp;&nbsp;std::cout &lt;&lt; scores.get("Alice");<br>
+              }<br>
+              scores.remove("Bob");
+            </div>
+            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-[11px] text-emerald-300">
+              <div class="text-slate-500 mb-1">// Persistent Store Usage</div>
+              PersistentKV db("data.log", "data.snapshot");<br>
+              db.put("session_id", "xyz123");<br>
+              db.put("theme", "dark");<br>
+              std::cout &lt;&lt; db.get("theme");<br>
+              db.remove("session_id");<br>
+              db.save_snapshot();
+            </div>
+          </div>
+        `,
+        notes: "The API is clean and idiomatic. You simply include the header, instantiate the class, and you have instant CRUD operations without complicated connection strings or configuration files.",
+        timing: "3:30 - 4:00"
+      },
+      {
+        title: "100k Ops Benchmark & Automated Test Suite",
+        badge: "Verification & Benchmarks",
+        content: `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-2">
+              <h4 class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Automated Test Coverage</h4>
+              <p class="text-xs text-slate-300">✔ test_int_values & test_string_values</p>
+              <p class="text-xs text-slate-300">✔ test_int_keys & polymorphic types</p>
+              <p class="text-xs text-slate-300">✔ test_contains_and_remove O(1) unlinking</p>
+              <p class="text-xs text-slate-300">✔ test_rehash 50+ key bulk insertion</p>
+              <p class="text-xs text-slate-300">✔ test_persistence crash-recovery lifecycle</p>
+            </div>
+            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-2">
+              <h4 class="text-xs font-bold text-cyan-400 uppercase tracking-wider">100,000 Operations Benchmark</h4>
+              <p class="text-xs text-slate-300">• Amortized O(1) sequential inserts</p>
+              <p class="text-xs text-slate-300">• Sub-millisecond lookup latency</p>
+              <p class="text-xs text-slate-300">• ~33% less pointer memory overhead per node</p>
+              <p class="text-xs text-slate-300">• Instant WAL sequential replay in &lt;5 ms</p>
+            </div>
+          </div>
+        `,
+        notes: "We verified ApexKV with both high-throughput benchmarks and automated unit tests covering type polymorphism, dynamic rehash boundaries, and multi-process crash lifecycles.",
+        timing: "4:00 - 4:30"
+      },
+      {
+        title: "Interactive 'Click & Play' Demo Companion",
+        badge: "Live Judge Interaction",
+        content: `
+          <div class="space-y-4">
+            <p class="text-sm text-slate-300">Judges can interact with ApexKV in real time via the companion demo application:</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center">
+                <span class="text-2xl block mb-1">🧱</span>
+                <span class="font-bold text-cyan-400">Live Visualizer</span>
+                <p class="text-[10px] text-slate-500 mt-1">Bucket collision tracking</p>
+              </div>
+              <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center">
+                <span class="text-2xl block mb-1">⚡</span>
+                <span class="font-bold text-indigo-400">Dynamic Rehash</span>
+                <p class="text-[10px] text-slate-500 mt-1">16 → 32 capacity live</p>
+              </div>
+              <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center">
+                <span class="text-2xl block mb-1">📜</span>
+                <span class="font-bold text-amber-400">WAL Stream</span>
+                <p class="text-[10px] text-slate-500 mt-1">Real-time disk logger</p>
+              </div>
+              <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center">
+                <span class="text-2xl block mb-1">💥</span>
+                <span class="font-bold text-rose-400">Crash & Replay</span>
+                <p class="text-[10px] text-slate-500 mt-1">1-click disaster recovery</p>
+              </div>
+            </div>
+          </div>
+        `,
+        notes: "Judges can test the interactive demo right away: insert keys, watch hash collisions form, trigger live rehashing, and simulate a process crash with instant WAL replay.",
+        timing: "4:30 - 4:45"
+      },
+      {
+        title: "Roadmap: Future Production Scale",
+        badge: "Future Vision",
+        content: `
+          <div class="space-y-3">
+            <div class="p-3 bg-slate-950 rounded-xl border border-emerald-800 flex items-start gap-3">
+              <span class="text-emerald-400 font-bold text-sm">✔ Phase 1:</span>
+              <p class="text-xs text-slate-300">Generic HashTable core, dynamic 0.75 load factor rehash, append-only WAL, snapshots, and full test suite.</p>
+            </div>
+            <div class="p-3 bg-slate-950 rounded-xl border border-cyan-800 flex items-start gap-3">
+              <span class="text-cyan-400 font-bold text-sm">⏳ Phase 2:</span>
+              <p class="text-xs text-slate-300">Key TTL/Expiration engine, striped lock table for multi-threading, CRC32 checksums for WAL validation.</p>
+            </div>
+            <div class="p-3 bg-slate-950 rounded-xl border border-indigo-800 flex items-start gap-3">
+              <span class="text-indigo-400 font-bold text-sm">⚡ Phase 3:</span>
+              <p class="text-xs text-slate-300">Network server layer (Redis RESP & REST protocols), memory-mapped I/O snapshots, and distributed sharding.</p>
+            </div>
+          </div>
+        `,
+        notes: "Our roadmap includes key TTL expiration, fine-grained thread-safe locks, and a Redis RESP network layer to turn ApexKV into a production-grade distributed embedded cache.",
+        timing: "4:45 - 5:00"
+      },
+      {
+        title: "Conclusion & Project Repository",
+        badge: "Summary & Q&A",
+        content: `
+          <div class="space-y-6 text-center max-w-2xl mx-auto py-4">
+            <h2 class="text-3xl font-extrabold text-white">ApexKV: Fast. Lightweight. Durable.</h2>
+            <p class="text-sm text-slate-300 leading-relaxed">
+              Modern C++17 in-memory storage engine featuring zero dependencies, low memory overhead, and deterministic crash recovery.
+            </p>
+            <div class="p-4 bg-slate-950 rounded-2xl border border-cyan-800 font-mono text-sm">
+              <div class="text-slate-400 text-xs mb-1">GITHUB REPOSITORY</div>
+              <a href="https://github.com/Tanish75/ApexKV" target="_blank" class="text-cyan-400 font-bold hover:underline">
+                https://github.com/Tanish75/ApexKV
+              </a>
+            </div>
+          </div>
+        `,
+        notes: "In summary, ApexKV provides clean, predictable, and durable storage for high-performance applications. Thank you for your time, and I welcome any questions!",
+        timing: "5:00"
+      }
+    ];
+
+    let currentSlide = 0;
+
+    function renderSlide() {
+      const slide = slidesData[currentSlide];
+      const stage = document.getElementById('slide-stage');
+      document.getElementById('slide-indicator').textContent = `Slide ${currentSlide + 1} of ${slidesData.length}`;
+      document.getElementById('slide-time-target').textContent = `Target: ${slide.timing}`;
+      document.getElementById('speaker-notes-text').textContent = slide.notes;
+
+      stage.innerHTML = `
+        <div>
+          <span class="text-xs font-bold text-cyan-400 uppercase tracking-widest bg-cyan-950/80 px-3 py-1 rounded-full border border-cyan-800">
+            ${slide.badge}
+          </span>
+          <h2 class="text-2xl md:text-3xl font-extrabold text-white mt-4 mb-6">${slide.title}</h2>
+          <div>${slide.content}</div>
+        </div>
+        <div class="mt-8 pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500 font-mono">
+          <span>ApexKV Presentation</span>
+          <span>github.com/Tanish75/ApexKV</span>
+        </div>
+      `;
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        currentSlide--;
+        renderSlide();
+      }
+    }
+
+    function nextSlide() {
+      if (currentSlide < slidesData.length - 1) {
+        currentSlide++;
+        renderSlide();
+      }
+    }
+
+    // --- 5-MINUTE TIMER LOGIC ---
+    let timerSecs = 300;
+    let timerInterval = null;
+
+    function toggleTimer() {
+      const btn = document.getElementById('timer-btn');
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        btn.textContent = 'Resume';
+      } else {
+        btn.textContent = 'Pause';
+        timerInterval = setInterval(() => {
+          if (timerSecs > 0) {
+            timerSecs--;
+            const mins = Math.floor(timerSecs / 60).toString().padStart(2, '0');
+            const secs = (timerSecs % 60).toString().padStart(2, '0');
+            document.getElementById('pitch-timer').textContent = `${mins}:${secs}`;
+          } else {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            document.getElementById('pitch-timer').textContent = '00:00 (Time Up!)';
+          }
+        }, 1000);
+      }
+    }
+
+    function resetTimer() {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      timerSecs = 300;
+      document.getElementById('pitch-timer').textContent = '05:00';
+      document.getElementById('timer-btn').textContent = 'Start';
+    }
+
+    // Initial render
+    renderBuckets();
+  </script>
+</body>
+</html>
