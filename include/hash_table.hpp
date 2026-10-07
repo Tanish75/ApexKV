@@ -8,13 +8,14 @@
 
 class HashTable {
 private:
-    std::forward_list<std::pair<std::string, int>>* buckets_;
-    size_t capacity_;
-    size_t size_;
-    double max_load_factor_;
+    std::forward_list<std::pair<std::string, int>>* table;
+    size_t cap;
+    size_t sz;
+    double maxLoad;
 
-    size_t hash_func(const std::string& key) const {
-        return std::hash<std::string>{}(key) % capacity_;
+    // hash and mod to get bucket index
+    size_t hashFunc(const std::string& key) const {
+        return std::hash<std::string>{}(key) % cap;
     }
 
 public:
@@ -22,12 +23,12 @@ public:
     ~HashTable();
 
     void put(const std::string& key, int value);
-    int get(const std::string& key) const;
-    void remove(const std::string& key);
+    int get(std::string key) const;
+    void remove(std::string key);
     size_t getSize() const;
 
-    double load_factor() const;
+    double loadFactor() const;
     void rehash();
 };
 
-#endif // HASH_TABLE_HPP
+#endif

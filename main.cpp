@@ -5,30 +5,33 @@ int main()
 {
     HashTable ht;
 
-    // Insert some keys (values as int)
-    ht.put("name_code", 1);      // 1 = code for some name
+    // basic insert
+    ht.put("name", 1);
     ht.put("age", 25);
-    ht.put("city_code", 101);    // 101 = code for some city
+    ht.put("city", 101);
 
-    // Update existing key
-    ht.put("name_code", 2);      // update value
+    // update check
+    ht.put("name", 2);
 
-    // Search
-    std::cout << "name_code: " << ht.get("name_code") << "\n";
+    // print results
+    std::cout << "name: " << ht.get("name") << "\n";
     std::cout << "age: " << ht.get("age") << "\n";
-    std::cout << "city_code: " << ht.get("city_code") << "\n";
-    std::cout << "country: " << ht.get("country") << "\n";  // not found -> -1
+    std::cout << "city: " << ht.get("city") << "\n";
+    std::cout << "country: " << ht.get("country") << "\n"; // should be -1
 
-    // Load factor test
-    std::cout << "Initial load factor: " << ht.load_factor() << "\n";
+    std::cout << "load factor: " << ht.loadFactor() << "\n";
 
-    // Insert enough keys to trigger resize
-    for (int i = 0; i < 50; ++i) 
-    {
+    // insert 50 keys to trigger resize
+    for (int i = 0; i < 50; i++) {
         ht.put("key" + std::to_string(i), i);
     }
 
-    std::cout << "After 50 inserts, load factor: " << ht.load_factor() << "\n";
+    std::cout << "after 50 inserts, load factor: " << ht.loadFactor() << "\n";
+    std::cout << "size: " << ht.getSize() << "\n";
+
+    // remove test
+    ht.remove("age");
+    std::cout << "age after remove: " << ht.get("age") << "\n"; // -1
 
     return 0;
 }
