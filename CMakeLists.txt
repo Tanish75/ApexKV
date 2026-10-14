@@ -26,6 +26,10 @@ target_include_directories(test_apexkv PRIVATE ${APEXKV_INCLUDE_DIR})
 add_executable(benchmark_apexkv benchmarks/benchmark.cpp)
 target_include_directories(benchmark_apexkv PRIVATE ${APEXKV_INCLUDE_DIR})
 
+add_executable(test_wal tests/test_wal.cpp)
+target_include_directories(test_wal PRIVATE ${APEXKV_INCLUDE_DIR})
+
 # CTest Registration
 enable_testing()
 add_test(NAME test_apexkv COMMAND test_apexkv)
+add_test(NAME test_wal COMMAND test_wal)
