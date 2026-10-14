@@ -1,0 +1,22 @@
+# Compiled binaries and libraries
+*.exe
+*.o
+*.a
+build/
+apexkv
+test_apexkv
+benchmark_apexkv
+
+# Log and snapshot data files
+*.log
+*.snapshot
+
+# Development / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
