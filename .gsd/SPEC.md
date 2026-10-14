@@ -1,56 +1,32 @@
-# SPEC.md — Project Specification
+# SPEC.md — Project Specification: ApexKV v2
 
 > **Status**: `FINALIZED`
 >
 > ⚠️ **Planning Lock**: No code may be written until this spec is marked `FINALIZED`.
 
 ## Vision
-ApexKV is a fast, lightweight in-memory key-value store built from scratch in C++17 utilizing a separate-chaining hash table with dynamic rehashing and load factor management. Designed as a clean systems programming portfolio project for SDE/backend roles at top tech companies, ApexKV v1.0 focuses on clean OOP design, empirical benchmarking, comprehensive unit testing, production-ready documentation, interactive live demos, and deployment on an AWS EC2 Linux server.
+ApexKV v2 hardens and extends an existing C++17 in-memory key-value store with durability (binary length-prefixed WAL with CRC32 checksums), atomic crash-consistent snapshotting, time-to-live (TTL) expiration, thread safety (`std::shared_mutex`), and an interactive CLI. Designed to be cleanly explainable in top-tier technical interviews by a 3rd-year B.Tech CS student with solid DSA and C++ fundamentals.
 
 ## Goals
-1. **Engine Polish & Robustness**: Finalize and harden the current C++17 separate-chaining hash table engine (`put`, `get`, `remove`, `getSize`, `loadFactor`, `rehash`) with rule-of-five compliance, clean memory management, edge-case safety, and modern CMake build configuration.
-2. **Comprehensive Unit Testing**: Build a rigorous test suite covering CRUD operations, hash collisions, load factor triggers, dynamic rehashing integrity, and boundary conditions.
-3. **Empirical Benchmarking**: Implement an automated benchmark suite measuring throughput (ops/sec) and latency for sequential and random insert, search, update, and delete workloads.
-4. **AWS EC2 Live Deployment**: Deploy and run ApexKV on an AWS EC2 Linux instance with automated setup scripts/systemd service configuration so it is live and testable.
-5. **Interactive Demo & Portfolio Documentation**: Deliver an interactive CLI demo and a comprehensive, professional `README.md` containing architectural breakdowns, time complexity analysis, benchmark results, deployment steps, and visual demo artifacts.
+1. **Housekeeping & Build**: Clean repository hygiene (delete stale `src/hash_table.cpp`, untrack executables, fix `.gitignore`), and modern standard CMake build targets (`apexkv`, `test_apexkv`, `benchmark_apexkv`) with `-Wall -Wextra` and `ctest` support.
+2. **Robust HashTable**: Vector-backed separate chaining (`std::vector<std::forward_list<Pair>>`) eliminating raw `new[]`/`delete[]`, with pointer-returning `find()` to avoid redundant lookups. Comprehensive tests covering collisions, 0.75 rehash threshold, update semantics, and middle-of-chain removal.
+3. **Crash-Consistent WAL v2**: Binary length-prefixed write-ahead logging (op, key len, value len, key, value, CRC32) supporting arbitrary keys/values (spaces, newlines, binary). Atomic temp-file snapshots with rename, corruption truncation on recovery, and torn-write / bad-checksum unit tests.
+4. **Time-To-Live (TTL)**: Lazy expiration on access (`get`/`contains`) with persistent expiration timestamps surviving crash restarts through the log.
+5. **Thread Safety & CLI**: Concurrent read/write safety via coarse `std::shared_mutex` (shared for reads, exclusive for writes), tested under multi-threaded load. Interactive CLI supporting `SET`, `GET`, `DEL`, `EXPIRE`.
+6. **Empirical Quality & Documentation**: Rigorous benchmark comparisons against `std::unordered_map` with honest metrics, memory validation via `-fsanitize=address,undefined` and valgrind, GitHub Actions CI workflow, and clear documentation.
 
-## Non-Goals (Explicitly Deferred to v2.0)
-- Multi-threaded concurrent TCP server & Redis RESP network protocol (v2.0).
-- Write-Ahead Log (WAL) & Point-in-Time snapshotting persistence (v2.0).
-- LRU caching and memory-bounded eviction policies (v2.0).
-- Key expiration / TTL subsystem (v2.0).
-- LSM-Tree on-disk storage engine, replication, and distributed clustering (v2.0).
-
-## Users & Target Audience
-- **Hiring Managers & Systems Interviewers**: Reviewing clean C++ memory management, algorithmic data structure implementation, benchmarking rigor, and cloud deployment.
-- **Backend / Systems Developers**: Using ApexKV as an embedded or standalone in-memory key-value data structure.
+## Hard Rules
+- Code simplicity: Written as a 3rd-year B.Tech CS student with solid C++ and DSA basics. No template metaprogramming, no over-abstraction. Short comments only where non-obvious.
+- Interview explainability: Every line must be defensible in an engineering interview.
+- Honesty: Never invent benchmark numbers or claim unimplemented features.
+- Atomic commits: One small atomic commit per task with plain, clear messages. Never alter commit dates.
+- Style: `snake_case`, trailing underscore on private/member variables (`table_`, `cap_`), plain C++17, standard library only, zero dependencies.
 
 ## Constraints
-- **Language**: Modern C++17 standard with standard library only.
-- **Platform**: Linux (primary deployment target on AWS EC2) and Windows (local development environment).
-- **Build System**: Clean modular CMake configuration supporting GCC, Clang, and MSVC/MinGW.
-- **Memory Safety**: Zero memory leaks (valgrind / AddressSanitizer clean).
-
-## Success Criteria
-- [ ] Core `HashTable` engine passes 100% of unit tests with full coverage across edge cases, heavy collisions, and dynamic resizing.
-- [ ] CMake build targets (`apexkv_lib`, `apexkv_cli`, `apexkv_tests`, `apexkv_benchmark`) compile cleanly without warnings.
-- [ ] Benchmark suite produces reproducible throughput metrics (ops/sec) under 10k, 100k, and 1M key operations.
-- [ ] ApexKV is successfully deployed and running on an AWS EC2 Linux server with documented verification steps.
-- [ ] Interactive CLI demo showcases real-time inserts, updates, lookups, deletions, and dynamic rehash diagnostics.
-- [ ] Comprehensive `README.md` is complete with architecture diagrams, complexity tables, benchmark graphs/tables, and deployment instructions.
-
-## Technical Requirements
-
-| Requirement | Priority | Notes |
-|-------------|----------|-------|
-| Robust Separate Chaining Hash Table | Must-have | Hardened C++17 memory management & Rule of 5 |
-| CMake Build System | Must-have | Modular library, CLI app, tests, and benchmark targets |
-| Comprehensive Unit Test Suite | Must-have | Boundary conditions, collisions, rehashing |
-| Automated Benchmark Harness | Must-have | Measures ops/sec and latency for CRUD operations |
-| Interactive CLI & Demo Mode | Must-have | Terminal interface for live interaction & demo records |
-| AWS EC2 Deployment Setup | Must-have | Linux build scripts, systemd/runner configuration |
-| Production-Grade README & Docs | Must-have | Architecture breakdown, complexity analysis, benchmark charts |
+- **Language Standard**: C++17 (`-std=c++17`).
+- **Dependencies**: Standard library only (Zero third-party libraries).
+- **Tooling**: CMake 3.14+, GCC/Clang with `-Wall -Wextra`.
 
 ---
 
-*Last updated: 2026-10-07*
+*Last updated: 2026-10-14*

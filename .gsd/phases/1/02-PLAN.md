@@ -2,106 +2,92 @@
 phase: 1
 plan: 2
 wave: 2
-depends_on: ["01"]
+depends_on:
+  - 1.1
 files_modified:
+  - benchmarks/benchmark.cpp
   - CMakeLists.txt
-  - main.cpp
+  - build.bat
+  - build.sh
 autonomous: true
 gap_closure: false
 
 must_haves:
   truths:
-    - "CMake configures and builds four distinct targets: apexkv_lib, apexkv_cli, apexkv_tests, and apexkv_bench"
-    - "CTest or ctest command executes test target cleanly"
-    - "Build succeeds on both Linux (GCC/Clang) and Windows (MSVC/MinGW)"
+    - "CMakeLists.txt builds apexkv, test_apexkv, and benchmark_apexkv with -Wall -Wextra"
+    - "test_apexkv is registered as a test with ctest"
+    - "build.bat and build.sh build all three executables cleanly with g++"
   artifacts:
-    - "CMakeLists.txt contains standard C++17 configuration, warning flags, include directories, and test registration"
+    - "benchmarks/benchmark.cpp exists as valid benchmark runner target"
+    - "CMakeLists.txt defines apexkv, test_apexkv, benchmark_apexkv and ctest integration"
 ---
 
-# Plan 1.2: CMake Build Infrastructure
+# Plan 1.2: CMake Targets, Benchmark Stub & Build Runner Updates
 
-<objective>
-Implement a modern, modular `CMakeLists.txt` build configuration that defines clear build targets (`apexkv_lib` static library, `apexkv_cli` executable, `apexkv_tests` test runner, and `apexkv_bench` benchmark runner), sets compiler warning flags, enables C++17 standard, and integrates CTest.
-</objective>
+## Objective
+Update `CMakeLists.txt` to build `apexkv`, `test_apexkv`, and `benchmark_apexkv` with `-Wall -Wextra` warnings and register tests with `ctest`. Create the `benchmarks/benchmark.cpp` baseline entry point and update the convenience build scripts (`build.bat` and `build.sh`) to build all three binaries.
 
-<context>
-Load for context:
-- .gsd/SPEC.md
-- .gsd/REQUIREMENTS.md
-- .gsd/phases/1/01-PLAN.md
-- CMakeLists.txt
-- include/hash_table.hpp
-- src/hash_table.cpp
-- main.cpp
-- tests/test_apexkv.cpp
-</context>
+## Context
+- `prd.md`
+- `.gsd/SPEC.md`
+- `CMakeLists.txt`
+- `build.bat`
+- `build.sh`
 
-<tasks>
+## Tasks
 
 <task type="auto">
-  <name>Construct Modular CMake Configuration</name>
+  <name>Create baseline benchmark runner in benchmarks/benchmark.cpp</name>
   <files>
-    CMakeLists.txt
-    main.cpp
+    benchmarks/benchmark.cpp
   </files>
   <action>
-    1. Write `CMakeLists.txt` with:
-       - `cmake_minimum_required(VERSION 3.14)`
-       - `project(ApexKV VERSION 1.0.0 LANGUAGES CXX)`
-       - `set(CMAKE_CXX_STANDARD 17)`
-       - `set(CMAKE_CXX_STANDARD_REQUIRED ON)`
-       - Strict compiler warning flags: `-Wall -Wextra -Wpedantic` on GNU/Clang and `/W4` on MSVC.
-       - Library target: `add_library(apexkv_lib STATIC src/hash_table.cpp)`
-       - Target include directory: `target_include_directories(apexkv_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)`
-       - CLI application target: `add_executable(apexkv_cli main.cpp)` linking `apexkv_lib`.
-       - Test target: `add_executable(apexkv_tests tests/test_apexkv.cpp)` linking `apexkv_lib`.
-       - Enable testing via `enable_testing()` and register `add_test(NAME ApexKVUnitTests COMMAND apexkv_tests)`.
-       - Benchmark placeholder target: add conditionally if benchmark source exists or prepare `add_executable(apexkv_bench benchmarks/benchmark.cpp)` with proper checks.
-    2. In `main.cpp`, update includes to use `#include "hash_table.hpp"` and utilize updated method return types.
+    1. Create `benchmarks/benchmark.cpp`.
+    2. Implement a minimal, clean C++17 benchmark entry point that includes `hash_table.hpp`.
+    3. Output initial baseline messages (e.g. running basic sequential insert timing with `std::chrono::high_resolution_clock`) without inventing false benchmark numbers.
+    4. Ensure it compiles cleanly with zero warnings under `-std=c++17 -Wall -Wextra`.
 
-    AVOID: Hardcoding platform-specific compiler paths or binary names.
-    USE: CMake standard generator expressions and target-based commands (`target_include_directories`, `target_link_libraries`).
+    AVOID: Complex benchmarking frameworks or fake benchmark numbers.
+    USE: Plain standard library `<chrono>`, `<iostream>`, `<string>` and `hash_table.hpp`.
   </action>
   <verify>
-    cmake -B build -S . && cmake --build build
+    g++ -std=c++17 -Wall -Wextra -I include benchmarks/benchmark.cpp -o build/benchmark_apexkv.exe && ./build/benchmark_apexkv.exe
   </verify>
   <done>
-    Build directory generates successfully and compiles `apexkv_lib`, `apexkv_cli`, and `apexkv_tests` with zero warnings.
+    `benchmarks/benchmark.cpp` compiles cleanly and executes a baseline timing check.
   </done>
 </task>
 
 <task type="auto">
-  <name>Validate CTest Integration and Artifact Generation</name>
+  <name>Update CMakeLists.txt, build.bat, and build.sh</name>
   <files>
     CMakeLists.txt
+    build.bat
+    build.sh
   </files>
   <action>
-    1. Verify test execution via CTest / test binary execution in build directory.
-    2. Ensure debug and release configurations both succeed without missing symbols.
-    3. Ensure clean build artifacts and test reports are generated.
-
-    AVOID: Relying on manual shell compile scripts when CMake is available.
-    USE: `ctest --test-dir build --output-on-failure` or direct execution of built test binary.
+    1. In `CMakeLists.txt`:
+       - Set C++17 standard required.
+       - Apply `-Wall -Wextra` flags for GCC/Clang (and `/W4` on MSVC).
+       - Add executable `apexkv` using `main.cpp`.
+       - Add executable `test_apexkv` using `tests/test_apexkv.cpp`.
+       - Add executable `benchmark_apexkv` using `benchmarks/benchmark.cpp`.
+       - Add include directory `include` to all three targets.
+       - Enable testing via `enable_testing()` and register `add_test(NAME test_apexkv COMMAND test_apexkv)`.
+    2. Update `build.bat` and `build.sh`:
+       - Compile `apexkv.exe`, `test_apexkv.exe`, and `benchmark_apexkv.exe` into `build/` using `g++ -std=c++17 -Wall -Wextra -O2 -I include`.
+       - Verify exit codes for each step.
   </action>
   <verify>
-    ctest --test-dir build --output-on-failure || ./build/apexkv_tests || ./build/Debug/apexkv_tests.exe || ./build/apexkv_tests.exe
+    cmd.exe /c build.bat
   </verify>
   <done>
-    All registered tests run and report 100% pass rate through the CMake test framework.
+    `CMakeLists.txt` defines `apexkv`, `test_apexkv`, `benchmark_apexkv` with `ctest`, and `build.bat` successfully compiles all 3 targets.
   </done>
 </task>
 
-</tasks>
-
-<verification>
-After all tasks, verify:
-- [ ] `cmake -B build -S .` configures cleanly
-- [ ] `cmake --build build` compiles all targets
-- [ ] Test target runs and passes 100%
-</verification>
-
-<success_criteria>
-- [ ] Modular CMake targets established for library, application, tests, and benchmarks
-- [ ] Cross-platform compilation working on Windows and Linux
-- [ ] Zero build warnings under `-Wall -Wextra`
-</success_criteria>
+## Success Criteria
+- [ ] `benchmarks/benchmark.cpp` exists and compiles cleanly
+- [ ] `CMakeLists.txt` defines `apexkv`, `test_apexkv`, `benchmark_apexkv` with `-Wall -Wextra` and `ctest` test registration
+- [ ] `build.bat` executes without error and builds all 3 executables
+- [ ] All targets compile with zero warnings

@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-14T20:48:00+05:30
+updated: 2026-10-14T22:31:30+05:30
 ---
 
 # Project State
@@ -8,28 +8,28 @@ updated: 2026-10-14T20:48:00+05:30
 
 **Milestone:** v2.0 - Harden & Extend ApexKV C++17 Store
 **Phase:** 1 - Housekeeping and Build
-**Status:** ready_for_planning
-**Plan:** Ready for Phase 1 execution / planning per `prd.md`
+**Status:** ready_for_execution
+**Plan:** Plans 1.1 and 1.2 ready for execution (`/execute 1`)
 
-## Last Session Summary
+## Last Action
 
-Codebase mapping complete:
-- 4 components identified (`HashTable`, `main.cpp` CLI, `tests/test_apexkv.cpp`, Build system)
-- 0 external dependencies (pure standard C++17 standard library)
-- 7 technical debt and hardening gaps cataloged (raw array memory, committed executables, missing `.gitignore` dot, stale `src/hash_table.cpp`, lack of `find()` pointer accessor, missing collision/rehash tests, pending WAL v2 / TTL / thread safety)
+Completed `/plan` for Phase 1:
+- Archived old v1.0 milestone phase logs to `.gsd/milestones/v1.0/`.
+- Updated `.gsd/SPEC.md` and `.gsd/ROADMAP.md` to reflect `prd.md` for Milestone v2.0.
+- Created `01-PLAN.md` (Repository Hygiene & Stale Source Cleanup: inline `HashTable` to `include/hash_table.hpp`, delete `src/hash_table.cpp`, untrack executables, rename `.gitignore`).
+- Created `02-PLAN.md` (CMake Targets, Benchmark Stub & Build Runner Updates: configure `apexkv`, `test_apexkv`, `benchmark_apexkv` with `-Wall -Wextra`, add `ctest` registration, update `build.bat`/`build.sh`).
 
 ## Next Steps
 
-1. Review mapped architecture ([.gsd/ARCHITECTURE.md](file:///c:/Users/rajke/OneDrive/Documents/Documents/python/CXX/.vscode/ApexKV/.gsd/ARCHITECTURE.md)) and stack ([.gsd/STACK.md](file:///c:/Users/rajke/OneDrive/Documents/Documents/python/CXX/.vscode/ApexKV/.gsd/STACK.md)).
-2. Plan and execute Phase 1: Housekeeping and build cleanup (remove tracked `.exe`, rename `gitignore` to `.gitignore`, delete stale `src/hash_table.cpp`, fix `CMakeLists.txt`).
+1. Run `/execute 1` to execute Plans 1.1 and 1.2.
 
 ## Active Decisions
 
 | Decision | Choice | Made | Affects |
 |----------|--------|------|---------|
-| Scope Focus | Transition to ApexKV v2 per `prd.md`: Vector-backed buckets, WAL v2 with CRC32, TTL, reader-writer locking | 2026-10-14 | All v2.0 phases |
-| Simplicity Constraint | 3rd-year CS student readability; no template metaprogramming, no over-abstraction | 2026-10-14 | All implementation |
-| Dependencies | Zero external dependencies; standard library C++17 only | 2026-10-14 | All components |
+| Header-Only Transition | Consolidate `HashTable` implementation directly into `include/hash_table.hpp` to eliminate stale `src/hash_table.cpp` cleanly without breaking callers | 2026-10-14 | Phase 1 & 2 |
+| Build System | Target `apexkv`, `test_apexkv`, and `benchmark_apexkv` with `ctest` in `CMakeLists.txt` alongside direct `build.bat` runner | 2026-10-14 | Phase 1 |
+| Milestone Reset | Archived legacy v1.0 files to `.gsd/milestones/v1.0/` and set v2.0 as active milestone per `prd.md` | 2026-10-14 | All phases |
 
 ## Blockers
 
@@ -37,8 +37,8 @@ Codebase mapping complete:
 
 ## Concerns
 
-- `cmake` executable is not installed in the current MSYS2/Windows PATH; build scripts (`build.bat`) or CMake installation should be verified when running `ctest`.
+- Note that `cmake` is not in the system's active PATH, but `build.bat` using GCC/g++ is verified and provides equivalent local validation.
 
 ## Session Context
 
-Codebase mapped with complete ARCHITECTURE.md and STACK.md.
+Phase 1 plans created and ready for execution.

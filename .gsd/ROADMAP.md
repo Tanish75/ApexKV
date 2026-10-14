@@ -1,116 +1,76 @@
 ---
-milestone: v1.0
-version: 1.0.0
-updated: 2026-10-07
+milestone: v2.0
+version: 2.0.0
+updated: 2026-10-14
 ---
 
-# Roadmap
+# Roadmap: ApexKV v2
 
-> **Current Phase:** Not started
+> **Current Phase:** Phase 1 - Housekeeping and Build
 > **Status:** planning
-> **Milestone:** v1.0 - Polish, Testing, Benchmarks, Deployment & Documentation
+> **Milestone:** v2.0 - Harden & Extend ApexKV C++17 Store
 
-## Must-Haves (from SPEC)
+## Must-Haves (from prd.md)
 
-- [ ] Hardened C++17 `HashTable` engine with clean memory management & Rule of 5 semantics
-- [ ] Modular CMake build configuration for library, CLI application, tests, and benchmarks
-- [ ] Comprehensive unit test suite with 100% test pass rate across CRUD, collisions, and rehashing
-- [ ] Automated benchmark suite measuring throughput (ops/sec) and latency
-- [ ] Interactive CLI demo mode for live testing and visual demonstrations
-- [ ] AWS EC2 deployment automation and live setup verification
-- [ ] Comprehensive production-grade `README.md` with architecture, benchmark metrics, and setup guide
+- [ ] Clean repository hygiene: no committed binaries/logs/snapshots, correct `.gitignore`
+- [ ] Unified CMakeLists.txt building `apexkv`, `test_apexkv`, and `benchmark_apexkv` with `-Wall -Wextra` and `ctest`
+- [ ] Safe `HashTable` backed by `std::vector<std::forward_list<Pair>>` with `find()` returning `Pair*`
+- [ ] Comprehensive unit tests with tiny assert helper covering collisions, rehash at 0.75 boundary, updates, middle-of-chain removal
+- [ ] Binary length-prefixed WAL v2 (op, key len, val len, key, val, CRC32) with corruption truncation and atomic snapshot rename
+- [ ] TTL key expiration subsystem surviving crash restarts via log
+- [ ] Reader-writer concurrency via `std::shared_mutex` in `PersistentKV` with multi-threaded tests
+- [ ] Interactive REPL/CLI for `SET`, `GET`, `DEL`, `EXPIRE`
+- [ ] Automated benchmarks vs `std::unordered_map` with honest measurements
+- [ ] Clean sanitizer/valgrind passes, GitHub Actions CI workflow, and verified `RESUME_NOTES.md`
 
 ---
 
 ## Phases
 
-### Phase 1: Engine Hardening & CMake Build Infrastructure
-**Status:** ⬜ Not Started
-**Objective:** Finalize the core C++17 `HashTable` implementation (memory safety, copy/move constructors, robust return types/edge cases) and construct a complete CMake build configuration (`apexkv_lib`, `apexkv_cli`, `apexkv_tests`, `apexkv_bench`).
-**Requirements:** REQ-01, REQ-02, NFR-01, NFR-02, NFR-03, NFR-04
-
-**Plans:**
-- [ ] Plan 1.1: Engine Hardening & Memory Lifecycle
-- [ ] Plan 1.2: CMake Build Infrastructure
+### Phase 1: Housekeeping and Build
+**Status:** 🔄 Planning
+**Objective:** Delete stale `src/hash_table.cpp`, remove committed `.exe`/`.log`/`.snapshot` files, rename `gitignore` to `.gitignore` (ignore `*.exe`, `*.log`, `*.snapshot`, `build/`), fix `CMakeLists.txt` to build `apexkv`, `test_apexkv`, `benchmark_apexkv` with `-Wall -Wextra` and register tests with `ctest`.
 
 ---
 
-### Phase 2: Comprehensive Unit Testing & Validation
+### Phase 2: HashTable and Tests
 **Status:** ⬜ Not Started
-**Objective:** Build an exhaustive unit testing framework covering CRUD operations, hash collisions, dynamic rehashing accuracy, boundary values, empty keys, and memory lifecycle checks.
+**Objective:** Replace raw `new[]`/`delete[]` with `std::vector<std::forward_list<Pair>>`; add `find()` returning pointer (`nullptr` if missing). Make `tests/test_apexkv.cpp` compile with a tiny assert-based helper. Add tests: forced collisions, rehash at 0.75 boundary, update existing key, remove from middle of chain, restart recovery.
 **Depends on:** Phase 1
-**Requirements:** REQ-03, NFR-02
-
-**Plans:**
-- [ ] Plan 2.1: Expand unit test suite in `tests/test_apexkv.cpp` with structured test cases and assertions
-- [ ] Plan 2.2: Add collision stress testing, rehash boundary assertions, and memory integrity validation
 
 ---
 
-### Phase 3: Benchmarking Suite & Performance Analysis
+### Phase 3: WAL v2 (Write-Ahead Logging & Crash Consistency)
 **Status:** ⬜ Not Started
-**Objective:** Build an automated benchmark executable (`benchmarks/benchmark.cpp`) to measure insert, lookup, update, and deletion throughput (ops/second) and latency percentiles across varying key counts (10k, 100k, 1M).
+**Objective:** Implement binary length-prefixed records (op, key len, value len, key, value, CRC32); keep the log stream open as a member; support keys/values with spaces and newlines; on startup stop at first corrupt/truncated record and truncate the log; write snapshots to a temp file then rename. Unit tests for torn last record and bad checksum.
 **Depends on:** Phase 2
-**Requirements:** REQ-04, NFR-01
-
-**Plans:**
-- [ ] Plan 3.1: Implement high-resolution benchmark runner measuring operations/sec for sequential and random workloads
-- [ ] Plan 3.2: Run benchmark suite, record performance baselines, and analyze load factor impact
 
 ---
 
-### Phase 4: Interactive CLI, Demo Experience & AWS EC2 Deployment
+### Phase 4: Time-To-Live (TTL)
 **Status:** ⬜ Not Started
-**Objective:** Create an interactive REPL/CLI for ApexKV with formatted outputs, build an automated deployment script for AWS EC2 Linux instances, and prepare demo visual artifacts.
+**Objective:** Support `put` with expiry; lazy removal on `get`/`contains`; ensure expiry timestamps survive restart through the log. Add comprehensive tests for expired vs active keys.
 **Depends on:** Phase 3
-**Requirements:** REQ-05, REQ-06
-
-**Plans:**
-- [ ] Plan 4.1: Build an interactive CLI (`main.cpp` / REPL) supporting `PUT`, `GET`, `REMOVE`, `STATS`, `DEMO`, `HELP`, `EXIT`
-- [ ] Plan 4.2: Create AWS EC2 deployment automation scripts (`deploy_ec2.sh`, systemd unit / runner) and deployment instructions
 
 ---
 
-### Phase 5: Production Documentation & Milestone Finalization
+### Phase 5: Thread Safety and CLI
 **Status:** ⬜ Not Started
-**Objective:** Write a comprehensive, industry-standard `README.md` featuring architecture overview, complexity analysis, benchmark results, EC2 deployment guide, demo recordings/screenshots, and prepare roadmap for v2.0.
+**Objective:** Add coarse `std::shared_mutex` in `PersistentKV` (shared for reads, exclusive for writes) plus a multi-threaded test. Turn `main.cpp` into a small interactive CLI supporting `SET`, `GET`, `DEL`, `EXPIRE`.
 **Depends on:** Phase 4
-**Requirements:** REQ-07, NFR-05
-
-**Plans:**
-- [ ] Plan 5.1: Create production-grade `README.md` with ASCII/Mermaid architecture diagrams, benchmark tables, and quickstart guide
-- [ ] Plan 5.2: Final milestone audit, verification, and tag v1.0 release
 
 ---
 
-## Progress Summary
-
-| Phase | Status | Plans | Complete |
-|-------|--------|-------|----------|
-| 1. Engine Hardening & CMake | ⬜ Not Started | 0/2 | 0% |
-| 2. Comprehensive Unit Testing | ⬜ Not Started | 0/2 | 0% |
-| 3. Benchmarking Suite | ⬜ Not Started | 0/2 | 0% |
-| 4. CLI, Demo & AWS EC2 Deployment | ⬜ Not Started | 0/2 | 0% |
-| 5. Documentation & Release | ⬜ Not Started | 0/2 | 0% |
-
----
-
-## Timeline
-
-| Phase | Started | Completed | Duration |
-|-------|---------|-----------|----------|
-| 1 | — | — | — |
-| 2 | — | — | — |
-| 3 | — | — | — |
-| 4 | — | — | — |
-| 5 | — | — | — |
+### Phase 6: Quality, CI and Documentation
+**Status:** ⬜ Not Started
+**Objective:** Benchmark with pre-generated keys, several repetitions, measuring ops/sec vs `std::unordered_map` (reporting honestly). Run tests under `-fsanitize=address,undefined` and valgrind and fix all issues. Add GitHub Actions workflow. Update `README.md` to document only what exists. Write uncommitted `RESUME_NOTES.md` with verified facts.
+**Depends on:** Phase 5
 
 ---
 
 ## Status Icons
-
 - ⬜ Not Started
-- 🔄 In Progress
+- 🔄 In Progress / Planning
 - ✅ Complete
 - ⏸️ Paused
 - ❌ Blocked

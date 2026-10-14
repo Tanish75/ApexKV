@@ -6,110 +6,94 @@ depends_on: []
 files_modified:
   - include/hash_table.hpp
   - src/hash_table.cpp
-  - tests/test_apexkv.cpp
+  - gitignore
+  - .gitignore
 autonomous: true
 gap_closure: false
 
 must_haves:
   truths:
-    - "HashTable safely handles copy construction, copy assignment, move construction, and move assignment without leaks or double frees"
-    - "HashTable provides const-correct get(), contains(), remove(), put(), loadFactor(), and getSize() methods"
-    - "get() cleanly distinguishes between key found with value and key missing"
+    - "HashTable is header-defined so apexkv and test_apexkv build directly from include/hash_table.hpp without src/hash_table.cpp"
+    - "No compiled binaries, logs, or snapshot files are tracked in git"
+    - ".gitignore is properly named with leading dot and ignores *.exe, *.log, *.snapshot, build/"
   artifacts:
-    - "include/hash_table.hpp defines complete Rule of 5 and enhanced API"
-    - "src/hash_table.cpp implements deep copy, move transfer, and memory cleanup"
+    - "include/hash_table.hpp contains complete inline/header implementation"
+    - ".gitignore exists with required ignore patterns"
 ---
 
-# Plan 1.1: Engine Hardening & Memory Lifecycle
+# Plan 1.1: Repository Hygiene & Stale Source Cleanup
 
-<objective>
-Harden the core C++17 `HashTable` implementation by implementing the Rule of 5 (copy constructor, copy assignment, move constructor, move assignment, destructor), adding const-correctness, robust method return types (`std::optional<int>` / `contains` / `bool remove`), and clean collision chaining memory safety.
-</objective>
+## Objective
+Clean up legacy repository artifacts by inlining `HashTable` implementation into `include/hash_table.hpp`, removing the stale `src/hash_table.cpp`, removing committed `.exe` binaries from git tracking, and renaming `gitignore` to `.gitignore` with updated exclusion rules.
 
-<context>
-Load for context:
-- .gsd/SPEC.md
-- .gsd/REQUIREMENTS.md
-- include/hash_table.hpp
-- src/hash_table.cpp
-- tests/test_apexkv.cpp
-</context>
+## Context
+- `prd.md`
+- `.gsd/SPEC.md`
+- `.gsd/ARCHITECTURE.md`
+- `include/hash_table.hpp`
+- `src/hash_table.cpp`
+- `gitignore`
 
-<tasks>
+## Tasks
 
 <task type="auto">
-  <name>Implement Rule of 5 and Memory Lifecycle Management</name>
+  <name>Consolidate HashTable into include/hash_table.hpp and delete stale src/hash_table.cpp</name>
   <files>
     include/hash_table.hpp
     src/hash_table.cpp
   </files>
   <action>
-    1. In `include/hash_table.hpp`, declare:
-       - Copy constructor: `HashTable(const HashTable& other)`
-       - Copy assignment: `HashTable& operator=(const HashTable& other)`
-       - Move constructor: `HashTable(HashTable&& other) noexcept`
-       - Move assignment: `HashTable& operator=(HashTable&& other) noexcept`
-       - Destructor: `~HashTable()`
-       - `void clear()` method to deallocate buckets and reset state.
-       - Helper method `void copyFrom(const HashTable& other)`.
-    2. In `src/hash_table.cpp`, implement deep copying of all buckets and nodes for copy operations.
-    3. In `src/hash_table.cpp`, implement zero-copy pointer stealing and nullification for move operations.
-    4. Ensure proper self-assignment guards (`if (this == &other) return *this;`) on both copy and move assignment operators.
-    
-    AVOID: Shallow pointer copies (`table = other.table`) which cause catastrophic double-free bugs.
-    USE: Explicit deep copy iteration over `std::forward_list` buckets in `copyFrom`.
+    1. Move method implementations from `src/hash_table.cpp` into `include/hash_table.hpp` (inline member functions) so that `HashTable` is self-contained.
+    2. Maintain existing behavior, Rule of 5 semantics, and member names (`table`, `cap`, `sz`, `maxLoad`).
+    3. Delete `src/hash_table.cpp` using git or filesystem removal.
+    4. Verify that `main.cpp` and `tests/test_apexkv.cpp` compile directly against `include/` without needing `src/hash_table.cpp`.
+
+    AVOID: Breaking existing method signatures or introducing new dependencies.
+    USE: Plain standard C++17 inline methods inside `include/hash_table.hpp`.
   </action>
   <verify>
-    g++ -std=c++17 -I include src/hash_table.cpp tests/test_apexkv.cpp -o test_apexkv.exe && ./test_apexkv.exe
+    g++ -std=c++17 -Wall -Wextra -I include tests/test_apexkv.cpp -o test_apexkv.exe && ./test_apexkv.exe
   </verify>
   <done>
-    HashTable can be copied, moved, assigned, and cleared with zero memory errors or dangling pointers.
+    `src/hash_table.cpp` is removed, and `test_apexkv.cpp` compiles cleanly and passes all tests using only `include/hash_table.hpp`.
   </done>
 </task>
 
 <task type="auto">
-  <name>Enhance Method Interfaces, Const-Correctness & Return Status</name>
+  <name>Remove committed binaries and rename gitignore to .gitignore</name>
   <files>
-    include/hash_table.hpp
-    src/hash_table.cpp
-    tests/test_apexkv.cpp
+    gitignore
+    .gitignore
   </files>
   <action>
-    1. Include `<optional>` in `include/hash_table.hpp`.
-    2. Enhance methods:
-       - `bool put(const std::string& key, int value)`: Returns `true` if a new key was inserted, `false` if existing key was updated.
-       - `std::optional<int> get(const std::string& key) const`: Returns `std::nullopt` when key not found, or `std::make_optional(value)` when found. Also keep backward-compatible overload or helper `int getOrDefault(const std::string& key, int defaultVal) const`.
-       - `bool contains(const std::string& key) const`: Returns `true` if key exists in the table.
-       - `bool remove(const std::string& key)`: Returns `true` if key was found and removed, `false` if key did not exist.
-       - `size_t getCapacity() const`: Returns current bucket count `cap`.
-       - `double getLoadFactor() const`: Returns current `loadFactor()`.
-       - `void setMaxLoadFactor(double load)`: Allows configuring max load factor threshold (default 0.75).
-    3. Ensure key arguments are passed as `const std::string&` across all methods.
-    4. Update `tests/test_apexkv.cpp` to validate new signatures and return values.
+    1. Untrack committed executable binaries: `apexkv.exe` and `test_apexkv.exe` using `git rm --cached apexkv.exe test_apexkv.exe`.
+    2. Untrack any committed `.log` or `.snapshot` files if present.
+    3. Rename `gitignore` to `.gitignore`.
+    4. Ensure `.gitignore` explicitly includes:
+       - `*.exe`
+       - `*.o`
+       - `*.a`
+       - `*.log`
+       - `*.snapshot`
+       - `build/`
+       - `.vscode/`
+       - `.DS_Store`
+       - `Thumbs.db`
+    5. Check `git status` to verify `.exe` files and build outputs are ignored and untracked.
 
-    AVOID: Passing `std::string` by value in `get()` and `remove()`.
-    USE: `const std::string&` to avoid unnecessary string allocations.
+    AVOID: Leaving binaries or un-dotted `gitignore` in source control.
   </action>
   <verify>
-    g++ -std=c++17 -I include src/hash_table.cpp tests/test_apexkv.cpp -o test_apexkv.exe && ./test_apexkv.exe
+    git status --ignored
   </verify>
   <done>
-    All methods compile cleanly, return explicit boolean/optional indicators, and pass updated test validations.
+    `git ls-files` shows no `.exe`, `.log`, or `.snapshot` files, and `.gitignore` correctly ignores build artifacts.
   </done>
 </task>
 
-</tasks>
-
-<verification>
-After all tasks, verify:
-- [ ] Copy constructor and copy assignment create independent deep copies
-- [ ] Move constructor and move assignment transfer ownership cleanly without allocating new memory
-- [ ] `get()` returns `std::optional<int>` correctly identifying present vs missing keys
-- [ ] `remove()` returns `true` on success and `false` on nonexistent key
-</verification>
-
-<success_criteria>
-- [ ] All tasks verified passing with g++ compiler
-- [ ] Zero compile warnings or errors under `-std=c++17 -Wall -Wextra`
-- [ ] Backward compatibility with existing tests maintained
-</success_criteria>
+## Success Criteria
+- [ ] `src/hash_table.cpp` is deleted
+- [ ] `include/hash_table.hpp` provides complete self-contained `HashTable`
+- [ ] `test_apexkv.cpp` compiles and passes all unit tests
+- [ ] `.gitignore` is named correctly and active
+- [ ] Zero `.exe`, `.log`, or `.snapshot` files tracked in git
