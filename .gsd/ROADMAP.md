@@ -28,7 +28,7 @@ updated: 2026-10-14
 ## Phases
 
 ### Phase 1: Housekeeping and Build
-**Status:** 🔄 Planning
+**Status:** ✅ Complete
 **Objective:** Delete stale `src/hash_table.cpp`, remove committed `.exe`/`.log`/`.snapshot` files, rename `gitignore` to `.gitignore` (ignore `*.exe`, `*.log`, `*.snapshot`, `build/`), fix `CMakeLists.txt` to build `apexkv`, `test_apexkv`, `benchmark_apexkv` with `-Wall -Wextra` and register tests with `ctest`.
 
 ---
