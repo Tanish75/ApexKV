@@ -34,7 +34,7 @@ updated: 2026-10-14
 ---
 
 ### Phase 2: HashTable and Tests
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 **Objective:** Replace raw `new[]`/`delete[]` with `std::vector<std::forward_list<Pair>>`; add `find()` returning pointer (`nullptr` if missing). Make `tests/test_apexkv.cpp` compile with a tiny assert-based helper. Add tests: forced collisions, rehash at 0.75 boundary, update existing key, remove from middle of chain, restart recovery.
 **Depends on:** Phase 1
 
