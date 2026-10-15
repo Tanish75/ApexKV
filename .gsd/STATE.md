@@ -8,8 +8,8 @@ updated: 2026-10-14T23:18:40+05:30
 
 **Milestone:** v2.0 - Harden & Extend ApexKV C++17 Store
 **Phase:** 1 - Housekeeping and Build (Completed & Verified)
-**Status:** complete
-**Plan:** Ready for Phase 2: HashTable and tests (`/plan 2`)
+**Status:** Active (resumed 2026-10-15T14:45:00+05:30)
+**Plan:** In-flight session state reconciliation / Phase 2 (`/plan 2`)
 
 ## Last Session Summary
 

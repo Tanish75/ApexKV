@@ -2,157 +2,145 @@
 #define HASH_TABLE_HPP
 
 #include <string>
+#include <vector>
 #include <forward_list>
 #include <utility>
 #include <functional>
 #include <optional>
 #include <cstddef>
 
+// ---------------------------------------------------------------------------
+// HashTable — separate chaining hash table backed by std::vector of std::forward_list
+// ---------------------------------------------------------------------------
 class HashTable {
+public:
+    using Pair = std::pair<std::string, int>;
+
 private:
-    std::forward_list<std::pair<std::string, int>>* table;
-    size_t cap;
-    size_t sz;
-    double maxLoad;
+    std::vector<std::forward_list<Pair>> table_;
+    size_t cap_;
+    size_t sz_;
+    double max_load_;
 
-    // Hash and modulo to compute bucket index
-    size_t hashFunc(const std::string& key) const {
-        if (cap == 0) return 0;
-        return std::hash<std::string>{}(key) % cap;
-    }
-
-    void freeTable() noexcept {
-        delete[] table;
-        table = nullptr;
-        cap = 0;
-        sz = 0;
-    }
-
-    void copyFrom(const HashTable& other) {
-        cap = other.cap;
-        sz = other.sz;
-        maxLoad = other.maxLoad;
-        if (cap > 0) {
-            table = new std::forward_list<std::pair<std::string, int>>[cap];
-            for (size_t i = 0; i < cap; ++i) {
-                table[i] = other.table[i];
-            }
-        } else {
-            table = nullptr;
-        }
+    // Computes bucket index for key
+    size_t hash_func(const std::string& key) const {
+        if (cap_ == 0) return 0;
+        return std::hash<std::string>{}(key) % cap_;
     }
 
 public:
-    explicit HashTable(size_t initialCap = 16, double maxLoadFactor = 0.75)
-        : table(nullptr), cap(initialCap > 0 ? initialCap : 16), sz(0), maxLoad(maxLoadFactor > 0.0 ? maxLoadFactor : 0.75) {
-        table = new std::forward_list<std::pair<std::string, int>>[cap];
-    }
+    explicit HashTable(size_t initial_cap = 16, double max_load_factor = 0.75)
+        : table_(initial_cap > 0 ? initial_cap : 16),
+          cap_(initial_cap > 0 ? initial_cap : 16),
+          sz_(0),
+          max_load_(max_load_factor > 0.0 ? max_load_factor : 0.75) {}
 
-    // Rule of 5: Memory Lifecycle Management
-    ~HashTable() noexcept {
-        freeTable();
-    }
-
-    HashTable(const HashTable& other) {
-        copyFrom(other);
-    }
-
-    HashTable& operator=(const HashTable& other) {
-        if (this != &other) {
-            freeTable();
-            copyFrom(other);
-        }
-        return *this;
-    }
+    // Rule of 5: std::vector and std::forward_list handle all memory cleanly
+    ~HashTable() = default;
+    HashTable(const HashTable&) = default;
+    HashTable& operator=(const HashTable&) = default;
 
     HashTable(HashTable&& other) noexcept
-        : table(other.table), cap(other.cap), sz(other.sz), maxLoad(other.maxLoad) {
-        other.table = nullptr;
-        other.cap = 0;
-        other.sz = 0;
+        : table_(std::move(other.table_)),
+          cap_(other.cap_),
+          sz_(other.sz_),
+          max_load_(other.max_load_) {
+        other.cap_ = 0;
+        other.sz_ = 0;
     }
 
     HashTable& operator=(HashTable&& other) noexcept {
         if (this != &other) {
-            freeTable();
-            table = other.table;
-            cap = other.cap;
-            sz = other.sz;
-            maxLoad = other.maxLoad;
-
-            other.table = nullptr;
-            other.cap = 0;
-            other.sz = 0;
+            table_ = std::move(other.table_);
+            cap_ = other.cap_;
+            sz_ = other.sz_;
+            max_load_ = other.max_load_;
+            other.cap_ = 0;
+            other.sz_ = 0;
         }
         return *this;
     }
 
-    // Core Key-Value Operations
+    // Direct pointer lookup (nullptr if key is not found)
+    Pair* find(const std::string& key) {
+        if (cap_ == 0 || sz_ == 0) return nullptr;
+        size_t idx = hash_func(key);
+        for (auto& pair : table_[idx]) {
+            if (pair.first == key) {
+                return &pair;
+            }
+        }
+        return nullptr;
+    }
+
+    const Pair* find(const std::string& key) const {
+        if (cap_ == 0 || sz_ == 0) return nullptr;
+        size_t idx = hash_func(key);
+        for (const auto& pair : table_[idx]) {
+            if (pair.first == key) {
+                return &pair;
+            }
+        }
+        return nullptr;
+    }
+
+    // Insert or update. Returns true if new key was inserted, false if updated.
     bool put(const std::string& key, int value) {
-        if (cap == 0) {
-            cap = 16;
-            table = new std::forward_list<std::pair<std::string, int>>[cap];
-        }
-
-        size_t idx = hashFunc(key);
-
-        // Check if key already exists, update value
-        for (auto& kv : table[idx]) {
-            if (kv.first == key) {
-                kv.second = value;
-                return false; // Existing key updated
-            }
-        }
-
-        // Insert new key-value pair
-        table[idx].push_front({key, value});
-        sz++;
-
-        // Check load factor and trigger rehash if needed
-        if (getLoadFactor() > maxLoad) {
-            rehash();
-        }
-
-        return true; // New key inserted
-    }
-
-    std::optional<int> get(const std::string& key) const {
-        if (cap == 0 || sz == 0) {
-            return std::nullopt;
-        }
-
-        size_t idx = hashFunc(key);
-        for (const auto& kv : table[idx]) {
-            if (kv.first == key) {
-                return kv.second;
-            }
-        }
-
-        return std::nullopt;
-    }
-
-    int getOrDefault(const std::string& key, int defaultValue) const {
-        auto res = get(key);
-        return res.has_value() ? *res : defaultValue;
-    }
-
-    bool contains(const std::string& key) const {
-        return get(key).has_value();
-    }
-
-    bool remove(const std::string& key) {
-        if (cap == 0 || sz == 0) {
+        if (Pair* existing = find(key)) {
+            existing->second = value;
             return false;
         }
 
-        size_t idx = hashFunc(key);
-        auto& bucket = table[idx];
+        if (cap_ == 0) {
+            cap_ = 16;
+            table_.resize(cap_);
+        }
+
+        size_t idx = hash_func(key);
+        table_[idx].push_front({key, value});
+        sz_++;
+
+        if (getLoadFactor() > max_load_) {
+            rehash();
+        }
+
+        return true;
+    }
+
+    // Get optional value
+    std::optional<int> get(const std::string& key) const {
+        const Pair* pair = find(key);
+        if (pair != nullptr) {
+            return pair->second;
+        }
+        return std::nullopt;
+    }
+
+    // Lookup with fallback default
+    int getOrDefault(const std::string& key, int default_value) const {
+        auto res = get(key);
+        return res.has_value() ? *res : default_value;
+    }
+
+    // Key existence check
+    bool contains(const std::string& key) const {
+        return find(key) != nullptr;
+    }
+
+    // Remove key from bucket chain
+    bool remove(const std::string& key) {
+        if (cap_ == 0 || sz_ == 0) {
+            return false;
+        }
+
+        size_t idx = hash_func(key);
+        auto& bucket = table_[idx];
         auto prev = bucket.before_begin();
 
         for (auto it = bucket.begin(); it != bucket.end(); ++it) {
             if (it->first == key) {
                 bucket.erase_after(prev);
-                sz--;
+                sz_--;
                 return true;
             }
             prev = it;
@@ -161,70 +149,65 @@ public:
         return false;
     }
 
+    // Clear all elements
     void clear() noexcept {
-        if (table != nullptr && cap > 0) {
-            for (size_t i = 0; i < cap; ++i) {
-                table[i].clear();
-            }
+        for (auto& bucket : table_) {
+            bucket.clear();
         }
-        sz = 0;
+        sz_ = 0;
     }
 
     // State & Capacity Inspection
     size_t getSize() const noexcept {
-        return sz;
+        return sz_;
     }
 
     size_t getCapacity() const noexcept {
-        return cap;
+        return cap_;
     }
 
     double getLoadFactor() const noexcept {
-        if (cap == 0) return 0.0;
-        return static_cast<double>(sz) / static_cast<double>(cap);
+        if (cap_ == 0) return 0.0;
+        return static_cast<double>(sz_) / static_cast<double>(cap_);
     }
 
     double getMaxLoadFactor() const noexcept {
-        return maxLoad;
+        return max_load_;
     }
 
     void setMaxLoadFactor(double load) {
         if (load > 0.05) {
-            maxLoad = load;
-            if (getLoadFactor() > maxLoad) {
+            max_load_ = load;
+            if (getLoadFactor() > max_load_) {
                 rehash();
             }
         }
     }
 
     bool isEmpty() const noexcept {
-        return sz == 0;
+        return sz_ == 0;
     }
 
     // Dynamic Resizing
     void rehash() {
-        size_t newCap = (cap > 0) ? (cap * 2) : 16;
-        rehash(newCap);
+        size_t new_cap = (cap_ > 0) ? (cap_ * 2) : 16;
+        rehash(new_cap);
     }
 
-    void rehash(size_t newCap) {
-        if (newCap == 0) newCap = 16;
+    void rehash(size_t new_cap) {
+        if (new_cap == 0) new_cap = 16;
 
-        auto* newTable = new std::forward_list<std::pair<std::string, int>>[newCap];
+        std::vector<std::forward_list<Pair>> new_table(new_cap);
 
-        // Rehash all existing elements into new table
-        if (table != nullptr && cap > 0) {
-            for (size_t i = 0; i < cap; ++i) {
-                for (auto& kv : table[i]) {
-                    size_t idx = std::hash<std::string>{}(kv.first) % newCap;
-                    newTable[idx].push_front(std::move(kv));
-                }
+        for (auto& bucket : table_) {
+            for (auto& pair : bucket) {
+                size_t idx = std::hash<std::string>{}(pair.first) % new_cap;
+                new_table[idx].push_front(std::move(pair));
             }
         }
 
-        delete[] table;
-        table = newTable;
-        cap = newCap;
+        table_ = std::move(new_table);
+        cap_ = new_cap;
     }
 };
 
