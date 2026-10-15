@@ -55,7 +55,7 @@ updated: 2026-10-14
 ---
 
 ### Phase 5: Thread Safety and CLI
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 **Objective:** Add coarse `std::shared_mutex` in `PersistentKV` (shared for reads, exclusive for writes) plus a multi-threaded test. Turn `main.cpp` into a small interactive CLI supporting `SET`, `GET`, `DEL`, `EXPIRE`.
 **Depends on:** Phase 4
 
