@@ -81,16 +81,16 @@ void test_ttl_query_and_manual_expire() {
         // Query non-existent key: returns -2
         assert(kv.ttl("non_existent") == -2);
 
-        // Assign 2-second TTL via expire()
-        assert(kv.expire("session", 2) == true);
+        // Assign 1-second TTL via expire()
+        assert(kv.expire("session", 1) == true);
         int64_t rem = kv.ttl("session");
-        assert(rem >= 1 && rem <= 2);
+        assert(rem >= 0 && rem <= 1);
 
         // Setting expire on missing key returns false
         assert(kv.expire("missing", 5) == false);
 
         // Sleep past expiration
-        std::this_thread::sleep_for(std::chrono::milliseconds(2100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1100));
 
         // After expiration, ttl returns -2 and key is removed
         assert(kv.ttl("session") == -2);
