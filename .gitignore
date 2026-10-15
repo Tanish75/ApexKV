@@ -1,20 +1,21 @@
-# Compiled binaries and libraries
+# Compiled binaries, libraries, and build directories
 *.exe
 *.o
 *.a
+*.obj
 build/
 apexkv
 test_apexkv
+test_wal
+test_ttl
+test_thread_safety
 benchmark_apexkv
 
-# Log, WAL and snapshot data files
+# Log, WAL, snapshot, and temporary data files
 *.log
 *.wal
-*.snapshot
+*.snapshot*
 *.tmp
-
-# Uncommitted portfolio notes
-RESUME_NOTES.md
 
 # Development / IDE
 .vscode/
@@ -25,3 +26,17 @@ RESUME_NOTES.md
 # OS files
 .DS_Store
 Thumbs.db
+
+# Tooling, AI frameworks, and agent configs (not part of the product)
+.agent/
+.agents/
+.gemini/
+.gsd/
+adapters/
+scripts/
+prd.md
+PROJECT_RULES.md
+GSD-STYLE.md
+model_capabilities.yaml
+RESUME_NOTES.md
+VERSION

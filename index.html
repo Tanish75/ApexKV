@@ -32,7 +32,7 @@
         <h1 class="font-bold text-lg tracking-tight text-white flex items-center gap-2">
           ApexKV <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">C++17 Engine</span>
         </h1>
-        <p class="text-xs text-slate-400">Track D: Data & Storage &bull; Team: The Optimizer</p>
+        <p class="text-xs text-slate-400">Embedded Key-Value Storage Engine &bull; Zero External Dependencies</p>
       </div>
     </div>
     
@@ -87,7 +87,7 @@
           <span id="metric-wal" class="text-lg font-bold text-amber-400">WAL ACTIVE</span>
           <span class="text-xs text-emerald-400">SYNC</span>
         </div>
-        <div class="text-[11px] text-slate-500 mt-1">apexkv.log & snapshot</div>
+        <div class="text-[11px] text-slate-500 mt-1">apexkv.wal & compaction</div>
       </div>
     </div>
 
@@ -173,7 +173,7 @@
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col h-[400px]">
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-sm font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-              <span>📜</span> Write-Ahead Log (<code class="text-xs text-slate-300 font-mono">apexkv.log</code>)
+              <span>📜</span> Write-Ahead Log (<code class="text-xs text-slate-300 font-mono">apexkv.wal</code>)
             </h2>
             <span id="wal-count" class="text-xs text-slate-400">0 lines</span>
           </div>
@@ -181,12 +181,12 @@
           
           <!-- Log Console -->
           <div id="wal-log-view" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs overflow-y-auto custom-scrollbar space-y-1 text-slate-300">
-            <div class="text-slate-600">// apexkv.log initialized</div>
+            <div class="text-slate-600">// apexkv.wal initialized</div>
           </div>
 
           <div class="mt-3 flex gap-2">
             <button onclick="saveSnapshot()" class="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow transition flex items-center justify-center gap-1">
-              📸 Save Snapshot & Compact
+              🗜 Compact WAL Log
             </button>
           </div>
         </div>
@@ -219,9 +219,8 @@
 
   </main>
 
-  <!-- Footer -->
   <footer class="border-t border-slate-800 py-4 px-6 text-center text-xs text-slate-500">
-    ApexKV Storage Engine &bull; Team The Optimizer &bull; Track D: Data & Storage &bull; <a href="https://github.com/Tanish75/ApexKV" class="text-cyan-400 hover:underline">github.com/Tanish75/ApexKV</a>
+    ApexKV Key-Value Storage Engine &bull; ISO C++17 &bull; Zero External Dependencies &bull; <a href="https://github.com/Tanish75/ApexKV" class="text-cyan-400 hover:underline">github.com/Tanish75/ApexKV</a>
   </footer>
 
   <!-- JAVASCRIPT ENGINE & LOGIC SIMULATOR -->
