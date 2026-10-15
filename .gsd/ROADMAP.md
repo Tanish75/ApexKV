@@ -41,7 +41,7 @@ updated: 2026-10-14
 ---
 
 ### Phase 3: WAL v2 (Write-Ahead Logging & Crash Consistency)
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 **Objective:** Implement binary length-prefixed records (op, key len, value len, key, value, CRC32); keep the log stream open as a member; support keys/values with spaces and newlines; on startup stop at first corrupt/truncated record and truncate the log; write snapshots to a temp file then rename. Unit tests for torn last record and bad checksum.
 **Depends on:** Phase 2
 
