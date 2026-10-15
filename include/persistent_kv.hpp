@@ -7,7 +7,12 @@
 #include <cstdint>
 #include <cstring>
 #include <vector>
-#include <cstdio>    // std::rename, std::remove
+#include <cstdio>
+#include <chrono>
+#include <unordered_map>
+#include <shared_mutex>
+#include <mutex>
+#include <optional>
 
 // ---------------------------------------------------------------------------
 // CRC32 (standard polynomial 0xEDB88320, lookup-table based)
@@ -46,50 +51,63 @@ inline uint32_t compute_crc32(const void* data, size_t len) {
 
 // ---------------------------------------------------------------------------
 // WAL record format (binary, length-prefixed):
-//   [total_len: 4 bytes] [op: 1 byte] [key_len: 4 bytes] [val_len: 4 bytes]
-//   [key: key_len bytes] [value: val_len bytes] [crc32: 4 bytes]
-//
-// op values: 1 = PUT, 2 = DELETE
-// CRC32 covers everything from op through value (excludes total_len and crc32).
+//   PUT:     [total_len: 4B] [op: 1B] [key_len: 4B] [val_len: 4B] [key] [val] [crc: 4B]
+//   DELETE:  [total_len: 4B] [op: 1B] [key_len: 4B] [val_len: 4B] [key] [crc: 4B]
+//   PUT_TTL: [total_len: 4B] [op: 1B] [key_len: 4B] [val_len: 4B] [expire_at: 8B] [key] [val] [crc: 4B]
+//   EXPIRE:  [total_len: 4B] [op: 1B] [key_len: 4B] [expire_at: 8B] [key] [crc: 4B]
 // ---------------------------------------------------------------------------
 
 enum class WalOp : uint8_t {
-    PUT    = 1,
-    DELETE = 2
+    PUT     = 1,
+    DELETE  = 2,
+    PUT_TTL = 3,
+    EXPIRE  = 4
 };
 
 // ---------------------------------------------------------------------------
-// PersistentKV — hash table backed by a write-ahead log
+// PersistentKV — thread-safe hash table backed by binary WAL with TTL support
 // ---------------------------------------------------------------------------
 class PersistentKV {
 private:
     HashTable table_;
+    std::unordered_map<std::string, int64_t> expiries_; // key -> unix timestamp seconds
     std::string wal_path_;
     std::string snapshot_path_;
-    std::ofstream wal_stream_;     // kept open for appending
+    std::ofstream wal_stream_;
+    mutable std::shared_mutex mutex_; // Coarse reader-writer lock
 
-    // ----- Low-level binary I/O helpers -----
+    // Helper: current epoch seconds
+    static int64_t now_seconds() {
+        return std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+    }
 
+    // Helper: low-level binary I/O
     static void write_u32(std::ostream& out, uint32_t val) {
         out.write(reinterpret_cast<const char*>(&val), 4);
     }
 
-    static void write_u8(std::ostream& out, uint8_t val) {
-        out.write(reinterpret_cast<const char*>(&val), 1);
+    static void write_u64(std::ostream& out, uint64_t val) {
+        out.write(reinterpret_cast<const char*>(&val), 8);
     }
 
     static bool read_u32(std::istream& in, uint32_t& val) {
         return !!in.read(reinterpret_cast<char*>(&val), 4);
     }
 
-    static bool read_u8(std::istream& in, uint8_t& val) {
-        return !!in.read(reinterpret_cast<char*>(&val), 1);
+    static bool read_u64(std::istream& in, uint64_t& val) {
+        return !!in.read(reinterpret_cast<char*>(&val), 8);
     }
 
-    // ----- WAL writing -----
+    // Check expiration without lock (must be called with lock held)
+    bool is_expired_unlocked(const std::string& key) const {
+        auto it = expiries_.find(key);
+        if (it == expiries_.end() || it->second <= 0) return false;
+        return now_seconds() >= it->second;
+    }
 
+    // WAL append methods
     void append_put(const std::string& key, const std::string& value) {
-        // Build payload: op(1) + key_len(4) + val_len(4) + key + value
         uint32_t key_len = static_cast<uint32_t>(key.size());
         uint32_t val_len = static_cast<uint32_t>(value.size());
         size_t payload_size = 1 + 4 + 4 + key.size() + value.size();
@@ -103,7 +121,31 @@ private:
         std::memcpy(&payload[pos], value.data(), value.size());
 
         uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
-        uint32_t total_len = static_cast<uint32_t>(payload_size + 4); // payload + crc
+        uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
+
+        write_u32(wal_stream_, total_len);
+        wal_stream_.write(reinterpret_cast<const char*>(payload.data()),
+                          static_cast<std::streamsize>(payload.size()));
+        write_u32(wal_stream_, crc);
+        wal_stream_.flush();
+    }
+
+    void append_put_ttl(const std::string& key, const std::string& value, int64_t expire_at) {
+        uint32_t key_len = static_cast<uint32_t>(key.size());
+        uint32_t val_len = static_cast<uint32_t>(value.size());
+        size_t payload_size = 1 + 4 + 4 + 8 + key.size() + value.size();
+
+        std::vector<uint8_t> payload(payload_size);
+        size_t pos = 0;
+        payload[pos++] = static_cast<uint8_t>(WalOp::PUT_TTL);
+        std::memcpy(&payload[pos], &key_len, 4); pos += 4;
+        std::memcpy(&payload[pos], &val_len, 4); pos += 4;
+        std::memcpy(&payload[pos], &expire_at, 8); pos += 8;
+        std::memcpy(&payload[pos], key.data(), key.size()); pos += key.size();
+        std::memcpy(&payload[pos], value.data(), value.size());
+
+        uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
+        uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
 
         write_u32(wal_stream_, total_len);
         wal_stream_.write(reinterpret_cast<const char*>(payload.data()),
@@ -134,10 +176,49 @@ private:
         wal_stream_.flush();
     }
 
-    // ----- Recovery -----
+    void append_expire(const std::string& key, int64_t expire_at) {
+        uint32_t key_len = static_cast<uint32_t>(key.size());
+        size_t payload_size = 1 + 4 + 8 + key.size();
 
-    // Replays the WAL from disk, stops at first corrupt/truncated record.
-    // Returns the byte offset of the last known-good position.
+        std::vector<uint8_t> payload(payload_size);
+        size_t pos = 0;
+        payload[pos++] = static_cast<uint8_t>(WalOp::EXPIRE);
+        std::memcpy(&payload[pos], &key_len, 4); pos += 4;
+        std::memcpy(&payload[pos], &expire_at, 8); pos += 8;
+        std::memcpy(&payload[pos], key.data(), key.size());
+
+        uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
+        uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
+
+        write_u32(wal_stream_, total_len);
+        wal_stream_.write(reinterpret_cast<const char*>(payload.data()),
+                          static_cast<std::streamsize>(payload.size()));
+        write_u32(wal_stream_, crc);
+        wal_stream_.flush();
+    }
+
+    // Unlocked operations
+    bool remove_unlocked(const std::string& key) {
+        if (!table_.contains(key)) return false;
+        append_delete(key);
+        expiries_.erase(key);
+        return table_.remove(key);
+    }
+
+    bool put_unlocked(const std::string& key, const std::string& value, int64_t ttl_seconds) {
+        int int_val = std::stoi(value);
+        if (ttl_seconds > 0) {
+            int64_t expire_at = now_seconds() + ttl_seconds;
+            append_put_ttl(key, value, expire_at);
+            expiries_[key] = expire_at;
+        } else {
+            append_put(key, value);
+            expiries_.erase(key);
+        }
+        return table_.put(key, int_val);
+    }
+
+    // Recovery from WAL on startup
     size_t replay_wal() {
         std::ifstream in(wal_path_, std::ios::binary);
         if (!in.is_open()) return 0;
@@ -145,67 +226,87 @@ private:
         size_t good_pos = 0;
 
         while (true) {
-            // Remember position before reading next record
             auto start = in.tellg();
             if (start == -1) break;
 
-            // Read total_len
             uint32_t total_len = 0;
-            if (!read_u32(in, total_len)) break;      // EOF — clean end
-            if (total_len < 10) break;                 // impossibly small
+            if (!read_u32(in, total_len)) break;
+            if (total_len < 10) break;
 
-            // Read the entire record body (payload + crc)
             std::vector<uint8_t> body(total_len);
             if (!in.read(reinterpret_cast<char*>(body.data()),
                          static_cast<std::streamsize>(total_len))) {
-                break;  // truncated record
+                break;
             }
 
-            // Verify CRC (last 4 bytes of body are the stored CRC)
             size_t payload_size = total_len - 4;
             uint32_t stored_crc = 0;
             std::memcpy(&stored_crc, &body[payload_size], 4);
-            uint32_t computed_crc =
-                crc32_detail::compute_crc32(body.data(), payload_size);
+            uint32_t computed_crc = crc32_detail::compute_crc32(body.data(), payload_size);
 
             if (stored_crc != computed_crc) {
-                break;  // corrupt record — stop here
+                break;
             }
 
-            // Parse the validated payload
             size_t pos = 0;
             auto op = static_cast<WalOp>(body[pos++]);
-            uint32_t key_len = 0, val_len = 0;
-            std::memcpy(&key_len, &body[pos], 4); pos += 4;
-            std::memcpy(&val_len, &body[pos], 4); pos += 4;
 
-            if (pos + key_len + val_len > payload_size) break; // malformed
-
-            std::string key(reinterpret_cast<char*>(&body[pos]), key_len);
-            pos += key_len;
-            std::string value(reinterpret_cast<char*>(&body[pos]), val_len);
-
-            // Apply to in-memory table
             if (op == WalOp::PUT) {
+                uint32_t key_len = 0, val_len = 0;
+                std::memcpy(&key_len, &body[pos], 4); pos += 4;
+                std::memcpy(&val_len, &body[pos], 4); pos += 4;
+                if (pos + key_len + val_len > payload_size) break;
+
+                std::string key(reinterpret_cast<char*>(&body[pos]), key_len); pos += key_len;
+                std::string value(reinterpret_cast<char*>(&body[pos]), val_len);
                 table_.put(key, std::stoi(value));
+                expiries_.erase(key);
+
             } else if (op == WalOp::DELETE) {
+                uint32_t key_len = 0, val_len = 0;
+                std::memcpy(&key_len, &body[pos], 4); pos += 4;
+                std::memcpy(&val_len, &body[pos], 4); pos += 4;
+                if (pos + key_len > payload_size) break;
+
+                std::string key(reinterpret_cast<char*>(&body[pos]), key_len);
                 table_.remove(key);
+                expiries_.erase(key);
+
+            } else if (op == WalOp::PUT_TTL) {
+                uint32_t key_len = 0, val_len = 0;
+                int64_t expire_at = 0;
+                std::memcpy(&key_len, &body[pos], 4); pos += 4;
+                std::memcpy(&val_len, &body[pos], 4); pos += 4;
+                std::memcpy(&expire_at, &body[pos], 8); pos += 8;
+                if (pos + key_len + val_len > payload_size) break;
+
+                std::string key(reinterpret_cast<char*>(&body[pos]), key_len); pos += key_len;
+                std::string value(reinterpret_cast<char*>(&body[pos]), val_len);
+                table_.put(key, std::stoi(value));
+                expiries_[key] = expire_at;
+
+            } else if (op == WalOp::EXPIRE) {
+                uint32_t key_len = 0;
+                int64_t expire_at = 0;
+                std::memcpy(&key_len, &body[pos], 4); pos += 4;
+                std::memcpy(&expire_at, &body[pos], 8); pos += 8;
+                if (pos + key_len > payload_size) break;
+
+                std::string key(reinterpret_cast<char*>(&body[pos]), key_len);
+                if (table_.contains(key)) {
+                    expiries_[key] = expire_at;
+                }
             }
 
             good_pos = static_cast<size_t>(in.tellg());
         }
 
         in.close();
-
-        // Truncate the WAL at the last good position to discard corruption
         truncate_file(wal_path_, good_pos);
-
         return good_pos;
     }
 
-    // Truncate a file to `size` bytes by rewriting it.
     static void truncate_file(const std::string& path, size_t size) {
-        // Read the good portion
         std::ifstream in(path, std::ios::binary);
         if (!in.is_open()) return;
 
@@ -215,7 +316,6 @@ private:
         }
         in.close();
 
-        // Rewrite the file with only the good bytes
         std::ofstream out(path, std::ios::binary | std::ios::trunc);
         if (size > 0) {
             out.write(buf.data(), static_cast<std::streamsize>(size));
@@ -224,82 +324,150 @@ private:
     }
 
 public:
-    // Constructor: recovers state from WAL, then opens for appending.
     explicit PersistentKV(const std::string& wal_path,
                           const std::string& snapshot_path = "")
         : wal_path_(wal_path),
-          snapshot_path_(snapshot_path.empty() ? wal_path + ".snapshot" : snapshot_path)
-    {
+          snapshot_path_(snapshot_path.empty() ? wal_path + ".snapshot" : snapshot_path) {
+
         replay_wal();
+
         wal_stream_.open(wal_path_, std::ios::binary | std::ios::app);
+        if (!wal_stream_.is_open()) {
+            wal_stream_.clear();
+            wal_stream_.open(wal_path_, std::ios::binary | std::ios::out | std::ios::trunc);
+        }
     }
 
     ~PersistentKV() {
         if (wal_stream_.is_open()) {
+            wal_stream_.flush();
             wal_stream_.close();
         }
     }
 
-    // Not copyable (owns a file stream)
     PersistentKV(const PersistentKV&) = delete;
     PersistentKV& operator=(const PersistentKV&) = delete;
 
-    // ----- Public API -----
+    // ----- Public API (Thread-Safe) -----
 
-    bool put(const std::string& key, const std::string& value) {
-        int int_val = std::stoi(value);
-        append_put(key, value);
-        return table_.put(key, int_val);
+    // Put with optional TTL (0 = no expiry)
+    bool put(const std::string& key, const std::string& value, int64_t ttl_seconds = 0) {
+        std::unique_lock lock(mutex_);
+        return put_unlocked(key, value, ttl_seconds);
     }
 
-    // Overload for int values
-    bool put(const std::string& key, int value) {
-        std::string val_str = std::to_string(value);
-        append_put(key, val_str);
-        return table_.put(key, value);
+    bool put(const std::string& key, int value, int64_t ttl_seconds = 0) {
+        std::unique_lock lock(mutex_);
+        return put_unlocked(key, std::to_string(value), ttl_seconds);
     }
 
-    std::optional<std::string> get(const std::string& key) const {
-        auto result = table_.get(key);
-        if (!result.has_value()) return std::nullopt;
-        return std::to_string(*result);
-    }
-
-    bool contains(const std::string& key) const {
-        return table_.contains(key);
-    }
-
-    bool remove(const std::string& key) {
+    // Set TTL on an existing key (returns false if key does not exist)
+    bool expire(const std::string& key, int64_t ttl_seconds) {
+        std::unique_lock lock(mutex_);
         if (!table_.contains(key)) return false;
-        append_delete(key);
-        return table_.remove(key);
+        if (is_expired_unlocked(key)) {
+            remove_unlocked(key);
+            return false;
+        }
+        if (ttl_seconds > 0) {
+            int64_t expire_at = now_seconds() + ttl_seconds;
+            append_expire(key, expire_at);
+            expiries_[key] = expire_at;
+        } else {
+            remove_unlocked(key);
+        }
+        return true;
     }
 
+    // Query remaining TTL in seconds
+    // -2: key not found or expired
+    // -1: key exists with no TTL set
+    // >= 0: seconds remaining until expiry
+    int64_t ttl(const std::string& key) {
+        {
+            std::shared_lock lock(mutex_);
+            if (!table_.contains(key)) return -2;
+            if (!is_expired_unlocked(key)) {
+                auto it = expiries_.find(key);
+                if (it == expiries_.end() || it->second <= 0) return -1;
+                return it->second - now_seconds();
+            }
+        }
+        // Key is expired: clean up with write lock
+        std::unique_lock lock(mutex_);
+        if (is_expired_unlocked(key)) {
+            remove_unlocked(key);
+        }
+        return -2;
+    }
+
+    // Get value (performs lazy removal if expired)
+    std::optional<std::string> get(const std::string& key) {
+        {
+            std::shared_lock lock(mutex_);
+            if (!is_expired_unlocked(key)) {
+                auto result = table_.get(key);
+                if (!result.has_value()) return std::nullopt;
+                return std::to_string(*result);
+            }
+        }
+        std::unique_lock lock(mutex_);
+        if (is_expired_unlocked(key)) {
+            remove_unlocked(key);
+        }
+        return std::nullopt;
+    }
+
+    // Check existence (performs lazy removal if expired)
+    bool contains(const std::string& key) {
+        {
+            std::shared_lock lock(mutex_);
+            if (!is_expired_unlocked(key)) {
+                return table_.contains(key);
+            }
+        }
+        std::unique_lock lock(mutex_);
+        if (is_expired_unlocked(key)) {
+            remove_unlocked(key);
+        }
+        return false;
+    }
+
+    // Delete key
+    bool remove(const std::string& key) {
+        std::unique_lock lock(mutex_);
+        return remove_unlocked(key);
+    }
+
+    // Count active non-expired elements
     size_t size() const {
-        return table_.getSize();
+        std::shared_lock lock(mutex_);
+        size_t total = table_.getSize();
+        size_t expired_count = 0;
+        int64_t now = now_seconds();
+        for (const auto& [k, exp] : expiries_) {
+            if (exp > 0 && now >= exp && table_.contains(k)) {
+                expired_count++;
+            }
+        }
+        return (total >= expired_count) ? (total - expired_count) : 0;
     }
 
-    // ----- Snapshot -----
-
-    // Write current state to a temp file, then atomically rename.
+    // Atomic Snapshot
     bool save_snapshot() {
+        std::unique_lock lock(mutex_);
         std::string tmp_path = snapshot_path_ + ".tmp";
 
         {
             std::ofstream out(tmp_path, std::ios::binary | std::ios::trunc);
             if (!out.is_open()) return false;
 
-            // Snapshot format: series of PUT records (same as WAL)
-            // We cannot iterate HashTable yet, so we replay the WAL
-            // to collect the final state.
-            // For now, snapshot = copy of the current WAL.
             std::ifstream wal_in(wal_path_, std::ios::binary);
             if (wal_in.is_open()) {
                 out << wal_in.rdbuf();
             }
         }
 
-        // Atomic rename (POSIX rename is atomic; on Windows, best-effort)
         std::remove(snapshot_path_.c_str());
         return std::rename(tmp_path.c_str(), snapshot_path_.c_str()) == 0;
     }

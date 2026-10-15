@@ -48,7 +48,7 @@ updated: 2026-10-14
 ---
 
 ### Phase 4: Time-To-Live (TTL)
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 **Objective:** Support `put` with expiry; lazy removal on `get`/`contains`; ensure expiry timestamps survive restart through the log. Add comprehensive tests for expired vs active keys.
 **Depends on:** Phase 3
 
