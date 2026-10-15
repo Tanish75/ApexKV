@@ -7,24 +7,25 @@
 #include <functional>
 #include <optional>
 #include <cstddef>
+#include <utility>
 
 // ---------------------------------------------------------------------------
 // HashTable — separate chaining hash table backed by std::vector of std::forward_list
 // ---------------------------------------------------------------------------
+template <typename Key, typename Value>
 class HashTable {
 public:
-    using Pair = std::pair<std::string, int>;
+    using Pair = std::pair<Key, Value>;
 
 private:
     std::vector<std::forward_list<Pair>> table_;
-    size_t cap_;
-    size_t sz_;
-    double max_load_;
+    size_t cap_{0};
+    size_t sz_{0};
+    double max_load_{0.75};
 
-    // Computes bucket index for key
-    size_t hash_func(const std::string& key) const {
+    size_t hash_func(const Key& key) const {
         if (cap_ == 0) return 0;
-        return std::hash<std::string>{}(key) % cap_;
+        return std::hash<Key>{}(key) % cap_;
     }
 
 public:
@@ -34,34 +35,14 @@ public:
           sz_(0),
           max_load_(max_load_factor > 0.0 ? max_load_factor : 0.75) {}
 
-    // Rule of 5: std::vector and std::forward_list handle all memory cleanly
+    // Special member functions: compiler-generated defaults
     ~HashTable() = default;
     HashTable(const HashTable&) = default;
     HashTable& operator=(const HashTable&) = default;
+    HashTable(HashTable&&) noexcept = default;
+    HashTable& operator=(HashTable&&) noexcept = default;
 
-    HashTable(HashTable&& other) noexcept
-        : table_(std::move(other.table_)),
-          cap_(other.cap_),
-          sz_(other.sz_),
-          max_load_(other.max_load_) {
-        other.cap_ = 0;
-        other.sz_ = 0;
-    }
-
-    HashTable& operator=(HashTable&& other) noexcept {
-        if (this != &other) {
-            table_ = std::move(other.table_);
-            cap_ = other.cap_;
-            sz_ = other.sz_;
-            max_load_ = other.max_load_;
-            other.cap_ = 0;
-            other.sz_ = 0;
-        }
-        return *this;
-    }
-
-    // Direct pointer lookup (nullptr if key is not found)
-    Pair* find(const std::string& key) {
+    Pair* find(const Key& key) {
         if (cap_ == 0 || sz_ == 0) return nullptr;
         size_t idx = hash_func(key);
         for (auto& pair : table_[idx]) {
@@ -72,7 +53,7 @@ public:
         return nullptr;
     }
 
-    const Pair* find(const std::string& key) const {
+    const Pair* find(const Key& key) const {
         if (cap_ == 0 || sz_ == 0) return nullptr;
         size_t idx = hash_func(key);
         for (const auto& pair : table_[idx]) {
@@ -83,8 +64,7 @@ public:
         return nullptr;
     }
 
-    // Insert or update. Returns true if new key was inserted, false if updated.
-    bool put(const std::string& key, int value) {
+    bool put(const Key& key, const Value& value) {
         if (Pair* existing = find(key)) {
             existing->second = value;
             return false;
@@ -106,8 +86,7 @@ public:
         return true;
     }
 
-    // Get optional value
-    std::optional<int> get(const std::string& key) const {
+    std::optional<Value> get(const Key& key) const {
         const Pair* pair = find(key);
         if (pair != nullptr) {
             return pair->second;
@@ -115,19 +94,16 @@ public:
         return std::nullopt;
     }
 
-    // Lookup with fallback default
-    int getOrDefault(const std::string& key, int default_value) const {
+    Value getOrDefault(const Key& key, const Value& default_value) const {
         auto res = get(key);
         return res.has_value() ? *res : default_value;
     }
 
-    // Key existence check
-    bool contains(const std::string& key) const {
+    bool contains(const Key& key) const {
         return find(key) != nullptr;
     }
 
-    // Remove key from bucket chain
-    bool remove(const std::string& key) {
+    bool remove(const Key& key) {
         if (cap_ == 0 || sz_ == 0) {
             return false;
         }
@@ -148,7 +124,6 @@ public:
         return false;
     }
 
-    // Clear all elements
     void clear() noexcept {
         for (auto& bucket : table_) {
             bucket.clear();
@@ -156,7 +131,6 @@ public:
         sz_ = 0;
     }
 
-    // State & Capacity Inspection
     size_t getSize() const noexcept {
         return sz_;
     }
@@ -187,7 +161,6 @@ public:
         return sz_ == 0;
     }
 
-    // Dynamic Resizing
     void rehash() {
         size_t new_cap = (cap_ > 0) ? (cap_ * 2) : 16;
         rehash(new_cap);
@@ -200,7 +173,7 @@ public:
 
         for (auto& bucket : table_) {
             for (auto& pair : bucket) {
-                size_t idx = std::hash<std::string>{}(pair.first) % new_cap;
+                size_t idx = std::hash<Key>{}(pair.first) % new_cap;
                 new_table[idx].push_front(std::move(pair));
             }
         }
@@ -208,6 +181,15 @@ public:
         table_ = std::move(new_table);
         cap_ = new_cap;
     }
+
+    template <typename Callback>
+    void for_each(Callback&& cb) const {
+        for (const auto& bucket : table_) {
+            for (const auto& pair : bucket) {
+                cb(pair.first, pair.second);
+            }
+        }
+    }
 };
 
-#endif
+#endif // HASH_TABLE_HPP

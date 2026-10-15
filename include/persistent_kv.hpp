@@ -69,7 +69,7 @@ enum class WalOp : uint8_t {
 // ---------------------------------------------------------------------------
 class PersistentKV {
 private:
-    HashTable table_;
+    HashTable<std::string, std::string> table_;
     std::unordered_map<std::string, int64_t> expiries_; // key -> unix timestamp seconds
     std::string wal_path_;
     std::string snapshot_path_;
@@ -206,7 +206,6 @@ private:
     }
 
     bool put_unlocked(const std::string& key, const std::string& value, int64_t ttl_seconds) {
-        int int_val = std::stoi(value);
         if (ttl_seconds > 0) {
             int64_t expire_at = now_seconds() + ttl_seconds;
             append_put_ttl(key, value, expire_at);
@@ -215,7 +214,7 @@ private:
             append_put(key, value);
             expiries_.erase(key);
         }
-        return table_.put(key, int_val);
+        return table_.put(key, value);
     }
 
     // Recovery from WAL on startup
@@ -259,7 +258,7 @@ private:
 
                 std::string key(reinterpret_cast<char*>(&body[pos]), key_len); pos += key_len;
                 std::string value(reinterpret_cast<char*>(&body[pos]), val_len);
-                table_.put(key, std::stoi(value));
+                table_.put(key, value);
                 expiries_.erase(key);
 
             } else if (op == WalOp::DELETE) {
@@ -282,7 +281,7 @@ private:
 
                 std::string key(reinterpret_cast<char*>(&body[pos]), key_len); pos += key_len;
                 std::string value(reinterpret_cast<char*>(&body[pos]), val_len);
-                table_.put(key, std::stoi(value));
+                table_.put(key, value);
                 expiries_[key] = expire_at;
 
             } else if (op == WalOp::EXPIRE) {
@@ -406,9 +405,7 @@ public:
         {
             std::shared_lock lock(mutex_);
             if (!is_expired_unlocked(key)) {
-                auto result = table_.get(key);
-                if (!result.has_value()) return std::nullopt;
-                return std::to_string(*result);
+                return table_.get(key);
             }
         }
         std::unique_lock lock(mutex_);

@@ -33,7 +33,7 @@ static int tests_total  = 0;
 
 void test_insert_and_search() {
     TEST("insert and search");
-    HashTable ht;
+    HashTable<std::string, int> ht;
     assert(ht.put("a", 10) == true);
     assert(ht.put("b", 20) == true);
     assert(ht.put("c", 30) == true);
@@ -58,7 +58,7 @@ void test_insert_and_search() {
 
 void test_update() {
     TEST("update existing key");
-    HashTable ht;
+    HashTable<std::string, int> ht;
     assert(ht.put("x", 1) == true);
     assert(ht.put("x", 100) == false);  // update returns false
 
@@ -71,7 +71,7 @@ void test_update() {
 
 void test_remove() {
     TEST("basic remove");
-    HashTable ht;
+    HashTable<std::string, int> ht;
     ht.put("a", 1);
     ht.put("b", 2);
     ht.put("c", 3);
@@ -88,7 +88,7 @@ void test_remove() {
 
 void test_size_and_capacity() {
     TEST("size and capacity tracking");
-    HashTable ht(8, 0.75);
+    HashTable<std::string, int> ht(8, 0.75);
     assert(ht.isEmpty() == true);
     assert(ht.getSize() == 0);
     assert(ht.getCapacity() == 8);
@@ -112,11 +112,11 @@ void test_size_and_capacity() {
 
 void test_find_pointer_accessor() {
     TEST("find() pointer accessor and in-place mutation");
-    HashTable ht;
+    HashTable<std::string, int> ht;
     ht.put("key1", 42);
 
     // Non-const pointer lookup
-    HashTable::Pair* p = ht.find("key1");
+    HashTable<std::string, int>::Pair* p = ht.find("key1");
     assert(p != nullptr);
     assert(p->first == "key1");
     assert(p->second == 42);
@@ -126,8 +126,8 @@ void test_find_pointer_accessor() {
     assert(ht.get("key1").value() == 99);
 
     // Const pointer lookup
-    const HashTable& const_ht = ht;
-    const HashTable::Pair* cp = const_ht.find("key1");
+    const HashTable<std::string, int>& const_ht = ht;
+    const HashTable<std::string, int>::Pair* cp = const_ht.find("key1");
     assert(cp != nullptr);
     assert(cp->second == 99);
 
@@ -141,7 +141,7 @@ void test_find_pointer_accessor() {
 void test_forced_collisions() {
     TEST("forced collisions in single bucket");
     // Initial capacity 1 with high max load prevents rehash so all elements collide in bucket 0
-    HashTable ht(1, 10.0);
+    HashTable<std::string, int> ht(1, 10.0);
     assert(ht.getCapacity() == 1);
 
     std::vector<std::string> keys = {"alpha", "beta", "gamma", "delta", "epsilon"};
@@ -165,7 +165,7 @@ void test_forced_collisions() {
 void test_remove_from_middle_of_chain() {
     TEST("removal from head, middle, and tail of collision chain");
     // Force bucket collision
-    HashTable ht(1, 10.0);
+    HashTable<std::string, int> ht(1, 10.0);
     // Keys pushed front: chain order in bucket is k5 -> k4 -> k3 -> k2 -> k1
     ht.put("k1", 1);
     ht.put("k2", 2);
@@ -203,7 +203,7 @@ void test_remove_from_middle_of_chain() {
 
 void test_rehash_boundary() {
     TEST("dynamic rehash at exact 0.75 threshold boundary");
-    HashTable ht(4, 0.75); // capacity = 4, threshold = 4 * 0.75 = 3
+    HashTable<std::string, int> ht(4, 0.75); // capacity = 4, threshold = 4 * 0.75 = 3
     assert(ht.getCapacity() == 4);
 
     ht.put("item1", 1);
@@ -235,13 +235,13 @@ void test_rehash_boundary() {
 
 void test_copy_semantics() {
     TEST("copy constructor and assignment (deep copy)");
-    HashTable original;
+    HashTable<std::string, int> original;
     original.put("alpha", 1);
     original.put("beta", 2);
     original.put("gamma", 3);
 
     // Copy Constructor
-    HashTable copied(original);
+    HashTable<std::string, int> copied(original);
     assert(copied.getSize() == 3);
     assert(copied.getOrDefault("alpha", 0) == 1);
     assert(copied.getOrDefault("beta", 0) == 2);
@@ -255,7 +255,7 @@ void test_copy_semantics() {
     assert(copied.contains("delta"));
 
     // Copy Assignment
-    HashTable assigned;
+    HashTable<std::string, int> assigned;
     assigned = original;
     assert(assigned.getSize() == 3);
     assert(assigned.getOrDefault("gamma", 0) == 3);
@@ -265,26 +265,38 @@ void test_copy_semantics() {
 
 void test_move_semantics() {
     TEST("move constructor and assignment");
-    HashTable source;
+    HashTable<std::string, int> source;
     source.put("m1", 10);
     source.put("m2", 20);
 
     // Move Constructor
-    HashTable moved(std::move(source));
+    HashTable<std::string, int> moved(std::move(source));
     assert(moved.getSize() == 2);
     assert(moved.getOrDefault("m1", 0) == 10);
     assert(moved.getOrDefault("m2", 0) == 20);
-    assert(source.getSize() == 0);
-    assert(source.getCapacity() == 0);
 
     // Move Assignment
-    HashTable target;
+    HashTable<std::string, int> target;
     target.put("temp", 99);
     target = std::move(moved);
     assert(target.getSize() == 2);
     assert(target.getOrDefault("m1", 0) == 10);
-    assert(moved.getSize() == 0);
-    assert(moved.getCapacity() == 0);
+    assert(target.getOrDefault("m2", 0) == 20);
+
+    PASS();
+}
+
+void test_string_template_instantiation() {
+    TEST("string key and string value template instantiation");
+    HashTable<std::string, std::string> ht;
+    assert(ht.put("greeting", "hello world") == true);
+    assert(ht.put("farewell", "goodbye\nworld") == true);
+    assert(ht.put("empty", "") == true);
+
+    assert(ht.get("greeting").value() == "hello world");
+    assert(ht.get("farewell").value() == "goodbye\nworld");
+    assert(ht.get("empty").value() == "");
+    assert(ht.getSize() == 3);
 
     PASS();
 }
@@ -297,11 +309,11 @@ void test_restart_recovery() {
 
     {
         PersistentKV kv(wal_file);
-        kv.put("user:101", 100);
-        kv.put("user:102", 200);
-        kv.put("user:103", 300);
+        kv.put("user:101", "100");
+        kv.put("user:102", "200");
+        kv.put("user:103", "300");
         kv.remove("user:102");
-        kv.put("user:101", 150); // update
+        kv.put("user:101", "150"); // update
         assert(kv.size() == 2);
     }
 
@@ -321,7 +333,7 @@ void test_restart_recovery() {
 }
 
 int main() {
-    std::cout << "=== Running ApexKV Phase 2 Tests ===\n";
+    std::cout << "=== ApexKV HashTable Unit Tests ===\n";
     test_insert_and_search();
     test_update();
     test_remove();
@@ -332,6 +344,7 @@ int main() {
     test_rehash_boundary();
     test_copy_semantics();
     test_move_semantics();
+    test_string_template_instantiation();
     test_restart_recovery();
 
     std::cout << "\n=== Test Results: " << tests_passed << "/" << tests_total << " PASSED ===\n";

@@ -33,7 +33,7 @@ int main() {
 
         // 1. ApexKV HashTable
         {
-            HashTable ht;
+            HashTable<std::string, int> ht;
             auto start_put = std::chrono::high_resolution_clock::now();
             for (int i = 0; i < num_ops; ++i) {
                 ht.put(keys[i], i);

@@ -313,6 +313,86 @@ void test_many_operations_recovery() {
     PASS();
 }
 
+void test_string_values_with_spaces_and_newlines() {
+    TEST("string values with spaces and newlines survive restart");
+    const std::string wal = "test_str_spaces_newlines.wal";
+    cleanup(wal);
+
+    const std::string multi_word = "hello brave new world of c++17";
+    const std::string multi_line = "first line\nsecond line with spaces\r\nthird line\ttabbed";
+
+    {
+        PersistentKV kv(wal);
+        kv.put("k_words", multi_word);
+        kv.put("k_lines", multi_line);
+        assert(kv.get("k_words").value() == multi_word);
+        assert(kv.get("k_lines").value() == multi_line);
+    }
+
+    {
+        PersistentKV kv(wal);
+        assert(kv.size() == 2);
+        auto w = kv.get("k_words");
+        assert(w.has_value() && w.value() == multi_word);
+        auto l = kv.get("k_lines");
+        assert(l.has_value() && l.value() == multi_line);
+    }
+
+    cleanup(wal);
+    PASS();
+}
+
+void test_empty_value() {
+    TEST("empty string value works and survives restart");
+    const std::string wal = "test_empty_val.wal";
+    cleanup(wal);
+
+    {
+        PersistentKV kv(wal);
+        assert(kv.put("empty_key", "") == true);
+        assert(kv.contains("empty_key") == true);
+        auto res = kv.get("empty_key");
+        assert(res.has_value() && res.value().empty());
+        assert(kv.size() == 1);
+    }
+
+    {
+        PersistentKV kv(wal);
+        assert(kv.size() == 1);
+        assert(kv.contains("empty_key") == true);
+        auto res = kv.get("empty_key");
+        assert(res.has_value() && res.value() == "");
+    }
+
+    cleanup(wal);
+    PASS();
+}
+
+void test_overwritten_key_keeps_latest_value() {
+    TEST("overwritten key keeps latest value after restart");
+    const std::string wal = "test_overwrite_latest.wal";
+    cleanup(wal);
+
+    {
+        PersistentKV kv(wal);
+        kv.put("status", "pending");
+        kv.put("status", "in_progress");
+        kv.put("status", "completed");
+        assert(kv.size() == 1);
+        assert(kv.get("status").value() == "completed");
+    }
+
+    {
+        PersistentKV kv(wal);
+        assert(kv.size() == 1);
+        auto res = kv.get("status");
+        assert(res.has_value() && res.value() == "completed");
+    }
+
+    cleanup(wal);
+    PASS();
+}
+
 // ---------------------------------------------------------------------------
 
 int main() {
@@ -328,6 +408,9 @@ int main() {
     test_keys_with_spaces_and_newlines();
     test_empty_wal_recovery();
     test_many_operations_recovery();
+    test_string_values_with_spaces_and_newlines();
+    test_empty_value();
+    test_overwritten_key_keeps_latest_value();
 
     std::cout << "\n=== WAL Tests: " << tests_passed << "/" << tests_total
               << " PASSED ===\n";
