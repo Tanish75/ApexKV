@@ -7,27 +7,23 @@ updated: 2026-10-14T23:18:40+05:30
 ## Current Position
 
 **Milestone:** v2.0 - Harden & Extend ApexKV C++17 Store
-**Phase:** 2 - HashTable and Tests (Completed & Verified)
+**Phase:** 6 - Quality, CI and Documentation (Completed & Verified)
 **Status:** complete
-**Plan:** Ready for Phase 3 / Phase 5 consolidation
+**Plan:** Milestone v2.0 Finished & Verified
 
 ## Last Session Summary
 
-Phase 2 executed successfully and verified against all criteria:
-- Refactored `HashTable` in `include/hash_table.hpp` to `std::vector<std::forward_list<Pair>> table_`, completely removing raw `new[]` and `delete[]`.
-- Added `Pair* find(const std::string& key)` and `const Pair* find(const std::string& key) const` returning `nullptr` if not found.
-- Added Rule of 5 move semantics zeroing out source size and capacity.
-- Expanded `tests/test_apexkv.cpp` with a tiny assert-based test helper (`TEST`, `PASS`), covering 11 comprehensive tests:
-  - In-place mutation and const lookup via `find()`
-  - Forced bucket collisions
-  - Middle-of-chain, head, and tail node removals
-  - Exact 0.75 dynamic rehash boundary
-  - Restart recovery via `PersistentKV` WAL
-- Verified 11/11 tests pass with zero compiler warnings under `-Wall -Wextra`.
+All 6 phases of Milestone v2.0 executed successfully and verified against all criteria:
+- **Phase 1 (Housekeeping & Build):** Clean repo hygiene, consolidated `HashTable` header, unified CMake and build runners.
+- **Phase 2 (HashTable & Tests):** Safe `std::vector<std::forward_list<Pair>>` bucket storage, `find()` pointer accessor, and 11 comprehensive tests.
+- **Phase 3 (WAL v2 & Crash Consistency):** Binary length-prefixed records with IEEE 802.3 CRC32 checksums, auto-truncation on corrupt/torn records, and atomic snapshot renaming.
+- **Phase 4 (Time-To-Live):** `put(key, val, ttl)`, manual `expire()`, `ttl()` queries, lazy deletion on access, and persistence surviving crash restarts.
+- **Phase 5 (Thread Safety & CLI):** Coarse `std::shared_mutex` embedded in `PersistentKV`, multi-threaded stress tests, and interactive CLI in `main.cpp`.
+- **Phase 6 (Quality & Docs):** 5-pass benchmark vs `std::unordered_map`, GitHub Actions CI workflow with AddressSanitizer and Valgrind, accurate `README.md`, and uncommitted `RESUME_NOTES.md`.
 
 ## Next Steps
 
-1. Note: Phase 3 (WAL v2 with CRC32) was already implemented in commit `77300c8`. Next step is to reconcile Phase 3/5 (incorporate thread safety & CLI or Phase 4 TTL).
+1. Milestone v2.0 is 100% complete and fully verified. Ready for portfolio showcase, code review, or release tagging.
 
 ## Active Decisions
 

@@ -7,21 +7,21 @@ updated: 2026-10-14
 # Roadmap: ApexKV v2
 
 > **Current Phase:** Phase 1 - Housekeeping and Build
-> **Status:** planning
+> **Status:** complete
 > **Milestone:** v2.0 - Harden & Extend ApexKV C++17 Store
 
 ## Must-Haves (from prd.md)
 
-- [ ] Clean repository hygiene: no committed binaries/logs/snapshots, correct `.gitignore`
-- [ ] Unified CMakeLists.txt building `apexkv`, `test_apexkv`, and `benchmark_apexkv` with `-Wall -Wextra` and `ctest`
-- [ ] Safe `HashTable` backed by `std::vector<std::forward_list<Pair>>` with `find()` returning `Pair*`
-- [ ] Comprehensive unit tests with tiny assert helper covering collisions, rehash at 0.75 boundary, updates, middle-of-chain removal
-- [ ] Binary length-prefixed WAL v2 (op, key len, val len, key, val, CRC32) with corruption truncation and atomic snapshot rename
-- [ ] TTL key expiration subsystem surviving crash restarts via log
-- [ ] Reader-writer concurrency via `std::shared_mutex` in `PersistentKV` with multi-threaded tests
-- [ ] Interactive REPL/CLI for `SET`, `GET`, `DEL`, `EXPIRE`
-- [ ] Automated benchmarks vs `std::unordered_map` with honest measurements
-- [ ] Clean sanitizer/valgrind passes, GitHub Actions CI workflow, and verified `RESUME_NOTES.md`
+- [x] Clean repository hygiene: no committed binaries/logs/snapshots, correct `.gitignore`
+- [x] Unified CMakeLists.txt building `apexkv`, `test_apexkv`, and `benchmark_apexkv` with `-Wall -Wextra` and `ctest`
+- [x] Safe `HashTable` backed by `std::vector<std::forward_list<Pair>>` with `find()` returning `Pair*`
+- [x] Comprehensive unit tests with tiny assert helper covering collisions, rehash at 0.75 boundary, updates, middle-of-chain removal
+- [x] Binary length-prefixed WAL v2 (op, key len, val len, key, val, CRC32) with corruption truncation and atomic snapshot rename
+- [x] TTL key expiration subsystem surviving crash restarts via log
+- [x] Reader-writer concurrency via `std::shared_mutex` in `PersistentKV` with multi-threaded tests
+- [x] Interactive REPL/CLI for `SET`, `GET`, `DEL`, `EXPIRE`
+- [x] Automated benchmarks vs `std::unordered_map` with honest measurements
+- [x] Clean sanitizer/valgrind passes, GitHub Actions CI workflow, and verified `RESUME_NOTES.md`
 
 ---
 
@@ -62,7 +62,7 @@ updated: 2026-10-14
 ---
 
 ### Phase 6: Quality, CI and Documentation
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 **Objective:** Benchmark with pre-generated keys, several repetitions, measuring ops/sec vs `std::unordered_map` (reporting honestly). Run tests under `-fsanitize=address,undefined` and valgrind and fix all issues. Add GitHub Actions workflow. Update `README.md` to document only what exists. Write uncommitted `RESUME_NOTES.md` with verified facts.
 **Depends on:** Phase 5
 

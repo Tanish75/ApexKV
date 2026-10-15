@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ valgrind
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror"
+
+    - name: Build All Targets
+      run: |
+        cmake --build build --config Release
+
+    - name: Run Test Suite (CTest)
+      run: |
+        ctest --test-dir build --output-on-failure
+
+    - name: Run Comparative Benchmark
+      run: |
+        ./build/benchmark_apexkv
+
+    - name: Address & Undefined Behavior Sanitizer Build & Run
+      run: |
+        mkdir -p build_san
+        g++ -std=c++17 -Wall -Wextra -O1 -g -fsanitize=address,undefined -I include tests/test_apexkv.cpp -o build_san/test_apexkv -pthread
+        g++ -std=c++17 -Wall -Wextra -O1 -g -fsanitize=address,undefined -I include tests/test_wal.cpp -o build_san/test_wal -pthread
+        g++ -std=c++17 -Wall -Wextra -O1 -g -fsanitize=address,undefined -I include tests/test_ttl.cpp -o build_san/test_ttl -pthread
+        g++ -std=c++17 -Wall -Wextra -O1 -g -fsanitize=address,undefined -I include tests/test_thread_safety.cpp -o build_san/test_thread_safety -pthread
+
+        ./build_san/test_apexkv
+        ./build_san/test_wal
+        ./build_san/test_ttl
+        ./build_san/test_thread_safety
+
+    - name: Valgrind Memory Leak Analysis
+      run: |
+        valgrind --leak-check=full --error-exitcode=1 ./build/test_apexkv
+        valgrind --leak-check=full --error-exitcode=1 ./build/test_wal
+        valgrind --leak-check=full --error-exitcode=1 ./build/test_ttl

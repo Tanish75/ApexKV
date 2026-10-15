@@ -7,9 +7,14 @@ apexkv
 test_apexkv
 benchmark_apexkv
 
-# Log and snapshot data files
+# Log, WAL and snapshot data files
 *.log
+*.wal
 *.snapshot
+*.tmp
+
+# Uncommitted portfolio notes
+RESUME_NOTES.md
 
 # Development / IDE
 .vscode/

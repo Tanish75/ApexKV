@@ -15,8 +15,8 @@ Requirements derived from `SPEC.md` for finalizing, testing, benchmarking, deplo
 
 | ID | Requirement | Source | Phase | Status |
 |----|-------------|--------|-------|--------|
-| REQ-01 | Harden `HashTable` core engine (clean memory management, Rule of 5 copy/move semantics, edge case handling) | SPEC Goal 1 | 1 | Pending |
-| REQ-02 | Implement complete CMake build configuration (`apexkv_lib`, `apexkv_cli`, `apexkv_tests`, `apexkv_bench`) | SPEC Goal 1 | 1 | Pending |
+| REQ-01 | Harden `HashTable` core engine (clean memory management, Rule of 5 copy/move semantics, edge case handling) | SPEC Goal 1 | 1 | Complete |
+| REQ-02 | Implement complete CMake build configuration (`apexkv_lib`, `apexkv_cli`, `apexkv_tests`, `apexkv_bench`) | SPEC Goal 1 | 1 | Complete |
 | REQ-03 | Comprehensive unit test suite with high test coverage (CRUD, collisions, resizing, load factor checks) | SPEC Goal 2 | 2 | Pending |
 | REQ-04 | Automated benchmark suite measuring operations per second (throughput) and latency across 10k–1M keys | SPEC Goal 3 | 3 | Pending |
 | REQ-05 | Interactive CLI interface supporting live CRUD commands, load factor inspection, and demo mode | SPEC Goal 5 | 4 | Pending |
