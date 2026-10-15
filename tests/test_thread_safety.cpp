@@ -27,8 +27,7 @@ static int tests_total  = 0;
 
 static void cleanup(const std::string& path) {
     std::remove(path.c_str());
-    std::remove((path + ".snapshot").c_str());
-    std::remove((path + ".snapshot.tmp").c_str());
+    std::remove((path + ".compact.tmp").c_str());
 }
 
 void test_single_thread_basic() {

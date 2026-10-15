@@ -305,7 +305,6 @@ void test_restart_recovery() {
     TEST("restart recovery with PersistentKV WAL");
     const std::string wal_file = "test_phase2_restart.wal";
     std::remove(wal_file.c_str());
-    std::remove((wal_file + ".snapshot").c_str());
 
     {
         PersistentKV kv(wal_file);
@@ -327,7 +326,6 @@ void test_restart_recovery() {
     }
 
     std::remove(wal_file.c_str());
-    std::remove((wal_file + ".snapshot").c_str());
 
     PASS();
 }

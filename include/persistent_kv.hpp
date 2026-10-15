@@ -72,7 +72,6 @@ private:
     HashTable<std::string, std::string> table_;
     std::unordered_map<std::string, int64_t> expiries_; // key -> unix timestamp seconds
     std::string wal_path_;
-    std::string snapshot_path_;
     std::ofstream wal_stream_;
     mutable std::shared_mutex mutex_; // Coarse reader-writer lock
 
@@ -323,10 +322,8 @@ private:
     }
 
 public:
-    explicit PersistentKV(const std::string& wal_path,
-                          const std::string& snapshot_path = "")
-        : wal_path_(wal_path),
-          snapshot_path_(snapshot_path.empty() ? wal_path + ".snapshot" : snapshot_path) {
+    explicit PersistentKV(const std::string& wal_path)
+        : wal_path_(wal_path) {
 
         replay_wal();
 
@@ -450,27 +447,111 @@ public:
         return (total >= expired_count) ? (total - expired_count) : 0;
     }
 
-    // Atomic Snapshot
-    bool save_snapshot() {
+    // Compacts the WAL by writing only active, non-expired keys to a temp file,
+    // then atomically replacing the WAL file.
+    bool compact() {
         std::unique_lock lock(mutex_);
-        std::string tmp_path = snapshot_path_ + ".tmp";
+        std::string tmp_path = wal_path_ + ".compact.tmp";
+
+        // Overwrite or create fresh temporary file
+        std::remove(tmp_path.c_str());
 
         {
-            std::ofstream out(tmp_path, std::ios::binary | std::ios::trunc);
-            if (!out.is_open()) return false;
-
-            std::ifstream wal_in(wal_path_, std::ios::binary);
-            if (wal_in.is_open()) {
-                out << wal_in.rdbuf();
+            std::ofstream tmp_stream(tmp_path, std::ios::binary | std::ios::trunc);
+            if (!tmp_stream.is_open()) {
+                return false;
             }
+
+            int64_t now = now_seconds();
+            table_.for_each([&](const std::string& key, const std::string& value) {
+                auto it = expiries_.find(key);
+                if (it != expiries_.end() && it->second > 0) {
+                    if (now >= it->second) {
+                        return; // Drop expired key
+                    }
+                    // Write PUT_TTL record
+                    uint32_t key_len = static_cast<uint32_t>(key.size());
+                    uint32_t val_len = static_cast<uint32_t>(value.size());
+                    int64_t expire_at = it->second;
+                    size_t payload_size = 1 + 4 + 4 + 8 + key.size() + value.size();
+
+                    std::vector<uint8_t> payload(payload_size);
+                    size_t pos = 0;
+                    payload[pos++] = static_cast<uint8_t>(WalOp::PUT_TTL);
+                    std::memcpy(&payload[pos], &key_len, 4); pos += 4;
+                    std::memcpy(&payload[pos], &val_len, 4); pos += 4;
+                    std::memcpy(&payload[pos], &expire_at, 8); pos += 8;
+                    std::memcpy(&payload[pos], key.data(), key.size()); pos += key.size();
+                    std::memcpy(&payload[pos], value.data(), value.size());
+
+                    uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
+                    uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
+
+                    write_u32(tmp_stream, total_len);
+                    tmp_stream.write(reinterpret_cast<const char*>(payload.data()),
+                                     static_cast<std::streamsize>(payload.size()));
+                    write_u32(tmp_stream, crc);
+                } else {
+                    // Write PUT record
+                    uint32_t key_len = static_cast<uint32_t>(key.size());
+                    uint32_t val_len = static_cast<uint32_t>(value.size());
+                    size_t payload_size = 1 + 4 + 4 + key.size() + value.size();
+
+                    std::vector<uint8_t> payload(payload_size);
+                    size_t pos = 0;
+                    payload[pos++] = static_cast<uint8_t>(WalOp::PUT);
+                    std::memcpy(&payload[pos], &key_len, 4); pos += 4;
+                    std::memcpy(&payload[pos], &val_len, 4); pos += 4;
+                    std::memcpy(&payload[pos], key.data(), key.size()); pos += key.size();
+                    std::memcpy(&payload[pos], value.data(), value.size());
+
+                    uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
+                    uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
+
+                    write_u32(tmp_stream, total_len);
+                    tmp_stream.write(reinterpret_cast<const char*>(payload.data()),
+                                     static_cast<std::streamsize>(payload.size()));
+                    write_u32(tmp_stream, crc);
+                }
+            });
+
+            tmp_stream.flush();
+            if (!tmp_stream.good()) {
+                tmp_stream.close();
+                std::remove(tmp_path.c_str());
+                return false;
+            }
+            tmp_stream.close();
         }
 
-        std::remove(snapshot_path_.c_str());
-        return std::rename(tmp_path.c_str(), snapshot_path_.c_str()) == 0;
+        // Purge expired keys from memory
+        int64_t now = now_seconds();
+        std::vector<std::string> expired_keys;
+        for (const auto& [k, exp] : expiries_) {
+            if (exp > 0 && now >= exp) {
+                expired_keys.push_back(k);
+            }
+        }
+        for (const auto& k : expired_keys) {
+            expiries_.erase(k);
+            table_.remove(k);
+        }
+
+        if (wal_stream_.is_open()) {
+            wal_stream_.close();
+        }
+
+        std::remove(wal_path_.c_str());
+        if (std::rename(tmp_path.c_str(), wal_path_.c_str()) != 0) {
+            wal_stream_.open(wal_path_, std::ios::binary | std::ios::app);
+            return false;
+        }
+
+        wal_stream_.open(wal_path_, std::ios::binary | std::ios::app);
+        return wal_stream_.is_open();
     }
 
     const std::string& wal_path() const { return wal_path_; }
-    const std::string& snapshot_path() const { return snapshot_path_; }
 };
 
 #endif // PERSISTENT_KV_HPP

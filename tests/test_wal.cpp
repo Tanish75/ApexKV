@@ -8,6 +8,8 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include <thread>
+#include <chrono>
 #include "persistent_kv.hpp"
 
 // Tiny test helper
@@ -29,8 +31,13 @@ static int tests_total  = 0;
 // Clean up test files
 static void cleanup(const std::string& path) {
     std::remove(path.c_str());
-    std::remove((path + ".snapshot").c_str());
-    std::remove((path + ".snapshot.tmp").c_str());
+    std::remove((path + ".compact.tmp").c_str());
+}
+
+static size_t get_file_size(const std::string& path) {
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if (!in.is_open()) return 0;
+    return static_cast<size_t>(in.tellg());
 }
 
 // ---------------------------------------------------------------------------
@@ -219,21 +226,126 @@ void test_bad_checksum() {
     PASS();
 }
 
-void test_snapshot() {
-    TEST("snapshot save and existence");
-    const std::string wal = "test_snap.wal";
+void test_compaction_file_shrinks_and_restarts() {
+    TEST("compaction shrinks file and state is identical after restart");
+    const std::string wal = "test_compact_shrink.wal";
     cleanup(wal);
 
     {
         PersistentKV kv(wal);
-        kv.put("alpha", "1");
-        kv.put("beta", "2");
-        assert(kv.save_snapshot() == true);
+        // Put 100 keys
+        for (int i = 0; i < 100; ++i) {
+            kv.put("k" + std::to_string(i), "init_" + std::to_string(i));
+        }
+        // Overwrite them 3 times to build up a large WAL log
+        for (int round = 0; round < 3; ++round) {
+            for (int i = 0; i < 100; ++i) {
+                kv.put("k" + std::to_string(i), "v" + std::to_string(round) + "_" + std::to_string(i));
+            }
+        }
+        // Delete 50 keys
+        for (int i = 0; i < 50; ++i) {
+            kv.remove("k" + std::to_string(i));
+        }
+        assert(kv.size() == 50);
 
-        // Verify snapshot file exists
-        std::ifstream snap(kv.snapshot_path(), std::ios::binary);
-        assert(snap.is_open());
-        snap.close();
+        size_t before_compact = get_file_size(wal);
+        assert(before_compact > 0);
+
+        bool compacted = kv.compact();
+        assert(compacted == true);
+
+        size_t after_compact = get_file_size(wal);
+        assert(after_compact < before_compact);
+        assert(kv.size() == 50);
+
+        for (int i = 50; i < 100; ++i) {
+            auto val = kv.get("k" + std::to_string(i));
+            assert(val.has_value() && val.value() == "v2_" + std::to_string(i));
+        }
+    }
+
+    // Verify recovery after restart on compacted WAL
+    {
+        PersistentKV kv(wal);
+        assert(kv.size() == 50);
+        for (int i = 0; i < 50; ++i) {
+            assert(!kv.contains("k" + std::to_string(i)));
+        }
+        for (int i = 50; i < 100; ++i) {
+            auto val = kv.get("k" + std::to_string(i));
+            assert(val.has_value() && val.value() == "v2_" + std::to_string(i));
+        }
+    }
+
+    cleanup(wal);
+    PASS();
+}
+
+void test_compaction_drops_expired_keys() {
+    TEST("compaction drops expired keys from log and memory");
+    const std::string wal = "test_compact_expired.wal";
+    cleanup(wal);
+
+    {
+        PersistentKV kv(wal);
+        kv.put("live_key", "persistent_val");
+        kv.put("short_lived", "to_be_expired", 1); // TTL = 1s
+
+        assert(kv.size() == 2);
+
+        // Sleep 1.2s to expire short_lived
+        std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+
+        bool compacted = kv.compact();
+        assert(compacted == true);
+        assert(kv.size() == 1);
+        assert(kv.get("live_key").value() == "persistent_val");
+        assert(!kv.get("short_lived").has_value());
+    }
+
+    // After restart, only live_key should be in the store
+    {
+        PersistentKV kv(wal);
+        assert(kv.size() == 1);
+        assert(kv.contains("live_key"));
+        assert(!kv.contains("short_lived"));
+    }
+
+    cleanup(wal);
+    PASS();
+}
+
+void test_compaction_overwrites_leftover_tmp() {
+    TEST("leftover tmp file from crash is overwritten on compact");
+    const std::string wal = "test_compact_tmp.wal";
+    cleanup(wal);
+
+    // Create a leftover .compact.tmp file simulating crash
+    const std::string tmp_file = wal + ".compact.tmp";
+    {
+        std::ofstream fake_tmp(tmp_file, std::ios::binary);
+        fake_tmp << "corrupted remnant from previous crash";
+    }
+    assert(get_file_size(tmp_file) > 0);
+
+    {
+        PersistentKV kv(wal);
+        kv.put("data_a", "val_a");
+        kv.put("data_b", "val_b");
+
+        bool ok = kv.compact();
+        assert(ok == true);
+        assert(kv.size() == 2);
+        assert(kv.get("data_a").value() == "val_a");
+        assert(kv.get("data_b").value() == "val_b");
+    }
+
+    // Verify restart works cleanly
+    {
+        PersistentKV kv(wal);
+        assert(kv.size() == 2);
+        assert(kv.get("data_a").value() == "val_a");
     }
 
     cleanup(wal);
@@ -404,7 +516,9 @@ int main() {
     test_restart_recovery();
     test_torn_last_record();
     test_bad_checksum();
-    test_snapshot();
+    test_compaction_file_shrinks_and_restarts();
+    test_compaction_drops_expired_keys();
+    test_compaction_overwrites_leftover_tmp();
     test_keys_with_spaces_and_newlines();
     test_empty_wal_recovery();
     test_many_operations_recovery();

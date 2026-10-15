@@ -26,6 +26,7 @@ static void print_help() {
               << "  EXPIRE <key> <secs>     — set expiration TTL in seconds\n"
               << "  TTL <key>               — get remaining TTL (-1: infinite, -2: not found)\n"
               << "  SIZE                    — show number of active keys\n"
+              << "  COMPACT                 — compact WAL log to purge stale and expired keys\n"
               << "  HELP                    — display this help menu\n"
               << "  EXIT / QUIT             — exit\n";
 }
@@ -117,6 +118,10 @@ int main() {
 
         } else if (cmd == "SIZE") {
             std::cout << kv.size() << " key(s)\n";
+
+        } else if (cmd == "COMPACT") {
+            bool ok = kv.compact();
+            std::cout << (ok ? "(compacted)\n" : "(compaction failed)\n");
 
         } else if (cmd == "HELP") {
             print_help();
