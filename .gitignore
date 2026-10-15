@@ -3,7 +3,7 @@
 *.o
 *.a
 *.obj
-build/
+build*/
 apexkv
 test_apexkv
 test_wal
