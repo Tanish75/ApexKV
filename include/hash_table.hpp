@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 #include <forward_list>
-#include <utility>
 #include <functional>
 #include <optional>
 #include <cstddef>
@@ -211,4 +210,4 @@ public:
     }
 };
 
-#endif // HASH_TABLE_HPP
+#endif
