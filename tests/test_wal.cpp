@@ -505,6 +505,150 @@ void test_overwritten_key_keeps_latest_value() {
     PASS();
 }
 
+void test_every_byte_offset_truncation() {
+    TEST("every byte offset truncation recovers valid prefix state");
+    const std::string seed_wal = "test_trunc_seed.wal";
+    cleanup(seed_wal);
+
+    // Create 4 distinct historical records
+    {
+        PersistentKV kv(seed_wal);
+        kv.put("k1", "v1");            // State 1: {k1: v1}
+        kv.put("k2", "v2");            // State 2: {k1: v1, k2: v2}
+        kv.put("k3", "v3");            // State 3: {k1: v1, k2: v2, k3: v3}
+        kv.put("k1", "v1_updated");    // State 4: {k1: v1_updated, k2: v2, k3: v3}
+    }
+
+    // Read entire valid log bytes
+    std::ifstream in(seed_wal, std::ios::binary);
+    std::vector<char> log_bytes((std::istreambuf_iterator<char>(in)),
+                                 std::istreambuf_iterator<char>());
+    in.close();
+    assert(!log_bytes.empty());
+
+    // Define the valid prefix states:
+    // Prefix 0: empty
+    // Prefix 1: k1=v1
+    // Prefix 2: k1=v1, k2=v2
+    // Prefix 3: k1=v1, k2=v2, k3=v3
+    // Prefix 4: k1=v1_updated, k2=v2, k3=v3
+    struct State {
+        std::vector<std::pair<std::string, std::string>> pairs;
+    };
+    std::vector<State> valid_states = {
+        {{}},
+        {{{"k1", "v1"}}},
+        {{{"k1", "v1"}, {"k2", "v2"}}},
+        {{{"k1", "v1"}, {"k2", "v2"}, {"k3", "v3"}}},
+        {{{"k1", "v1_updated"}, {"k2", "v2"}, {"k3", "v3"}}}
+    };
+
+    const std::string test_wal = "test_trunc_offset.wal";
+
+    for (size_t cut = 0; cut <= log_bytes.size(); ++cut) {
+        cleanup(test_wal);
+        {
+            std::ofstream out(test_wal, std::ios::binary | std::ios::trunc);
+            if (cut > 0) {
+                out.write(log_bytes.data(), static_cast<std::streamsize>(cut));
+            }
+        }
+
+        PersistentKV recovered(test_wal);
+
+        // Assert that the recovered state matches one of the valid historical prefix states
+        bool matches_any_state = false;
+        for (const auto& st : valid_states) {
+            if (recovered.size() == st.pairs.size()) {
+                bool all_match = true;
+                for (const auto& [k, v] : st.pairs) {
+                    auto val = recovered.get(k);
+                    if (!val.has_value() || *val != v) {
+                        all_match = false;
+                        break;
+                    }
+                }
+                if (all_match) {
+                    matches_any_state = true;
+                    break;
+                }
+            }
+        }
+        assert(matches_any_state);
+    }
+
+    cleanup(seed_wal);
+    cleanup(test_wal);
+    PASS();
+}
+
+void test_bit_flip_stops_recovery_before_corrupted_record() {
+    TEST("flipping one byte inside each record stops recovery before that record");
+    const std::string seed_wal = "test_flip_seed.wal";
+    cleanup(seed_wal);
+
+    {
+        PersistentKV kv(seed_wal);
+        kv.put("rec0", "val0");
+        kv.put("rec1", "val1");
+        kv.put("rec2", "val2");
+        kv.put("rec3", "val3");
+    }
+
+    std::ifstream in(seed_wal, std::ios::binary);
+    std::vector<uint8_t> log_bytes((std::istreambuf_iterator<char>(in)),
+                                   std::istreambuf_iterator<char>());
+    in.close();
+
+    // Parse record boundaries from the valid log
+    std::vector<size_t> record_offsets;
+    size_t cur = 0;
+    while (cur + 4 <= log_bytes.size()) {
+        uint32_t total_len = 0;
+        std::memcpy(&total_len, &log_bytes[cur], 4);
+        record_offsets.push_back(cur);
+        cur += 4 + total_len;
+    }
+    assert(record_offsets.size() == 4);
+
+    const std::string test_wal = "test_flip.wal";
+
+    for (size_t r = 0; r < record_offsets.size(); ++r) {
+        cleanup(test_wal);
+
+        std::vector<uint8_t> corrupted = log_bytes;
+        // Flip a byte inside the payload/crc of record r (e.g. offset + 8)
+        size_t flip_pos = record_offsets[r] + 8;
+        corrupted[flip_pos] ^= 0xFF;
+
+        {
+            std::ofstream out(test_wal, std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char*>(corrupted.data()),
+                      static_cast<std::streamsize>(corrupted.size()));
+        }
+
+        PersistentKV kv(test_wal);
+
+        // Recovery MUST halt before record r
+        assert(kv.size() == r);
+        for (size_t i = 0; i < r; ++i) {
+            std::string key = "rec" + std::to_string(i);
+            std::string exp = "val" + std::to_string(i);
+            auto v = kv.get(key);
+            assert(v.has_value() && *v == exp);
+        }
+        // Records from r onwards must NOT be present
+        for (size_t i = r; i < 4; ++i) {
+            std::string key = "rec" + std::to_string(i);
+            assert(!kv.contains(key));
+        }
+    }
+
+    cleanup(seed_wal);
+    cleanup(test_wal);
+    PASS();
+}
+
 // ---------------------------------------------------------------------------
 
 int main() {
@@ -525,6 +669,8 @@ int main() {
     test_string_values_with_spaces_and_newlines();
     test_empty_value();
     test_overwritten_key_keeps_latest_value();
+    test_every_byte_offset_truncation();
+    test_bit_flip_stops_recovery_before_corrupted_record();
 
     std::cout << "\n=== WAL Tests: " << tests_passed << "/" << tests_total
               << " PASSED ===\n";

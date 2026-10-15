@@ -13,36 +13,38 @@
 #include <shared_mutex>
 #include <mutex>
 #include <optional>
+#include <array>
 
 // ---------------------------------------------------------------------------
 // CRC32 (standard polynomial 0xEDB88320, lookup-table based)
+// Thread-safe function-local static initialization
 // ---------------------------------------------------------------------------
 namespace crc32_detail {
 
-inline uint32_t crc32_table[256] = {};
-inline bool crc32_table_ready = false;
-
-inline void build_crc32_table() {
-    if (crc32_table_ready) return;
-    for (uint32_t i = 0; i < 256; ++i) {
-        uint32_t crc = i;
-        for (int j = 0; j < 8; ++j) {
-            if (crc & 1)
-                crc = (crc >> 1) ^ 0xEDB88320u;
-            else
-                crc >>= 1;
+inline const uint32_t* get_crc32_table() {
+    static const auto table = []() {
+        std::array<uint32_t, 256> tbl{};
+        for (uint32_t i = 0; i < 256; ++i) {
+            uint32_t crc = i;
+            for (int j = 0; j < 8; ++j) {
+                if (crc & 1)
+                    crc = (crc >> 1) ^ 0xEDB88320u;
+                else
+                    crc >>= 1;
+            }
+            tbl[i] = crc;
         }
-        crc32_table[i] = crc;
-    }
-    crc32_table_ready = true;
+        return tbl;
+    }();
+    return table.data();
 }
 
 inline uint32_t compute_crc32(const void* data, size_t len) {
-    build_crc32_table();
+    const uint32_t* table = get_crc32_table();
     auto* bytes = static_cast<const uint8_t*>(data);
     uint32_t crc = 0xFFFFFFFFu;
     for (size_t i = 0; i < len; ++i) {
-        crc = (crc >> 8) ^ crc32_table[(crc ^ bytes[i]) & 0xFF];
+        crc = (crc >> 8) ^ table[(crc ^ bytes[i]) & 0xFF];
     }
     return crc ^ 0xFFFFFFFFu;
 }
@@ -229,7 +231,12 @@ private:
 
             uint32_t total_len = 0;
             if (!read_u32(in, total_len)) break;
-            if (total_len < 10) break;
+
+            constexpr uint32_t MIN_RECORD_LEN = 13;             // 1B op + 4B key_len + 4B val_len + 4B crc
+            constexpr uint32_t MAX_RECORD_LEN = 64 * 1024 * 1024; // 64 MB cap
+            if (total_len < MIN_RECORD_LEN || total_len > MAX_RECORD_LEN) {
+                break;
+            }
 
             std::vector<uint8_t> body(total_len);
             if (!in.read(reinterpret_cast<char*>(body.data()),
@@ -246,14 +253,19 @@ private:
                 break;
             }
 
+            if (payload_size < 1) break;
+
             size_t pos = 0;
             auto op = static_cast<WalOp>(body[pos++]);
 
             if (op == WalOp::PUT) {
+                if (static_cast<uint64_t>(pos) + 8 > static_cast<uint64_t>(payload_size)) break;
                 uint32_t key_len = 0, val_len = 0;
                 std::memcpy(&key_len, &body[pos], 4); pos += 4;
                 std::memcpy(&val_len, &body[pos], 4); pos += 4;
-                if (pos + key_len + val_len > payload_size) break;
+
+                uint64_t needed = static_cast<uint64_t>(pos) + static_cast<uint64_t>(key_len) + static_cast<uint64_t>(val_len);
+                if (needed > static_cast<uint64_t>(payload_size)) break;
 
                 std::string key(reinterpret_cast<char*>(&body[pos]), key_len); pos += key_len;
                 std::string value(reinterpret_cast<char*>(&body[pos]), val_len);
@@ -261,22 +273,28 @@ private:
                 expiries_.erase(key);
 
             } else if (op == WalOp::DELETE) {
+                if (static_cast<uint64_t>(pos) + 8 > static_cast<uint64_t>(payload_size)) break;
                 uint32_t key_len = 0, val_len = 0;
                 std::memcpy(&key_len, &body[pos], 4); pos += 4;
                 std::memcpy(&val_len, &body[pos], 4); pos += 4;
-                if (pos + key_len > payload_size) break;
+
+                uint64_t needed = static_cast<uint64_t>(pos) + static_cast<uint64_t>(key_len);
+                if (needed > static_cast<uint64_t>(payload_size)) break;
 
                 std::string key(reinterpret_cast<char*>(&body[pos]), key_len);
                 table_.remove(key);
                 expiries_.erase(key);
 
             } else if (op == WalOp::PUT_TTL) {
+                if (static_cast<uint64_t>(pos) + 16 > static_cast<uint64_t>(payload_size)) break;
                 uint32_t key_len = 0, val_len = 0;
                 int64_t expire_at = 0;
                 std::memcpy(&key_len, &body[pos], 4); pos += 4;
                 std::memcpy(&val_len, &body[pos], 4); pos += 4;
                 std::memcpy(&expire_at, &body[pos], 8); pos += 8;
-                if (pos + key_len + val_len > payload_size) break;
+
+                uint64_t needed = static_cast<uint64_t>(pos) + static_cast<uint64_t>(key_len) + static_cast<uint64_t>(val_len);
+                if (needed > static_cast<uint64_t>(payload_size)) break;
 
                 std::string key(reinterpret_cast<char*>(&body[pos]), key_len); pos += key_len;
                 std::string value(reinterpret_cast<char*>(&body[pos]), val_len);
@@ -284,16 +302,22 @@ private:
                 expiries_[key] = expire_at;
 
             } else if (op == WalOp::EXPIRE) {
+                if (static_cast<uint64_t>(pos) + 12 > static_cast<uint64_t>(payload_size)) break;
                 uint32_t key_len = 0;
                 int64_t expire_at = 0;
                 std::memcpy(&key_len, &body[pos], 4); pos += 4;
                 std::memcpy(&expire_at, &body[pos], 8); pos += 8;
-                if (pos + key_len > payload_size) break;
+
+                uint64_t needed = static_cast<uint64_t>(pos) + static_cast<uint64_t>(key_len);
+                if (needed > static_cast<uint64_t>(payload_size)) break;
 
                 std::string key(reinterpret_cast<char*>(&body[pos]), key_len);
                 if (table_.contains(key)) {
                     expiries_[key] = expire_at;
                 }
+            } else {
+                // Unknown opcode: stop replay immediately
+                break;
             }
 
             good_pos = static_cast<size_t>(in.tellg());
