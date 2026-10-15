@@ -1,5 +1,8 @@
-#include <iostream>
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
+#include <iostream>
 #include <thread>
 #include <vector>
 #include <string>
