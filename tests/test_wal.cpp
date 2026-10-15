@@ -19,7 +19,7 @@ static int tests_total  = 0;
 #define TEST(name)                                         \
     do {                                                   \
         tests_total++;                                     \
-        std::cout << "  TEST: " << name << "... ";         \
+        std::cout << "  TEST: " << name << "... " << std::flush; \
     } while(0)
 
 #define PASS()                                             \

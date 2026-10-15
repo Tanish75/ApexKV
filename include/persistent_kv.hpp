@@ -111,15 +111,21 @@ private:
     void append_put(const std::string& key, const std::string& value) {
         uint32_t key_len = static_cast<uint32_t>(key.size());
         uint32_t val_len = static_cast<uint32_t>(value.size());
-        size_t payload_size = 1 + 4 + 4 + key.size() + value.size();
+        size_t payload_size = 1 + 4 + 4 + key_len + val_len;
 
         std::vector<uint8_t> payload(payload_size);
         size_t pos = 0;
         payload[pos++] = static_cast<uint8_t>(WalOp::PUT);
         std::memcpy(&payload[pos], &key_len, 4); pos += 4;
         std::memcpy(&payload[pos], &val_len, 4); pos += 4;
-        std::memcpy(&payload[pos], key.data(), key.size()); pos += key.size();
-        std::memcpy(&payload[pos], value.data(), value.size());
+        if (key_len > 0) {
+            std::memcpy(&payload[pos], key.data(), key_len);
+            pos += key_len;
+        }
+        if (val_len > 0) {
+            std::memcpy(&payload[pos], value.data(), val_len);
+            pos += val_len;
+        }
 
         uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
         uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
@@ -134,7 +140,7 @@ private:
     void append_put_ttl(const std::string& key, const std::string& value, int64_t expire_at) {
         uint32_t key_len = static_cast<uint32_t>(key.size());
         uint32_t val_len = static_cast<uint32_t>(value.size());
-        size_t payload_size = 1 + 4 + 4 + 8 + key.size() + value.size();
+        size_t payload_size = 1 + 4 + 4 + 8 + key_len + val_len;
 
         std::vector<uint8_t> payload(payload_size);
         size_t pos = 0;
@@ -142,8 +148,14 @@ private:
         std::memcpy(&payload[pos], &key_len, 4); pos += 4;
         std::memcpy(&payload[pos], &val_len, 4); pos += 4;
         std::memcpy(&payload[pos], &expire_at, 8); pos += 8;
-        std::memcpy(&payload[pos], key.data(), key.size()); pos += key.size();
-        std::memcpy(&payload[pos], value.data(), value.size());
+        if (key_len > 0) {
+            std::memcpy(&payload[pos], key.data(), key_len);
+            pos += key_len;
+        }
+        if (val_len > 0) {
+            std::memcpy(&payload[pos], value.data(), val_len);
+            pos += val_len;
+        }
 
         uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
         uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
@@ -158,14 +170,17 @@ private:
     void append_delete(const std::string& key) {
         uint32_t key_len = static_cast<uint32_t>(key.size());
         uint32_t val_len = 0;
-        size_t payload_size = 1 + 4 + 4 + key.size();
+        size_t payload_size = 1 + 4 + 4 + key_len;
 
         std::vector<uint8_t> payload(payload_size);
         size_t pos = 0;
         payload[pos++] = static_cast<uint8_t>(WalOp::DELETE);
         std::memcpy(&payload[pos], &key_len, 4); pos += 4;
         std::memcpy(&payload[pos], &val_len, 4); pos += 4;
-        std::memcpy(&payload[pos], key.data(), key.size());
+        if (key_len > 0) {
+            std::memcpy(&payload[pos], key.data(), key_len);
+            pos += key_len;
+        }
 
         uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
         uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
@@ -179,14 +194,17 @@ private:
 
     void append_expire(const std::string& key, int64_t expire_at) {
         uint32_t key_len = static_cast<uint32_t>(key.size());
-        size_t payload_size = 1 + 4 + 8 + key.size();
+        size_t payload_size = 1 + 4 + 8 + key_len;
 
         std::vector<uint8_t> payload(payload_size);
         size_t pos = 0;
         payload[pos++] = static_cast<uint8_t>(WalOp::EXPIRE);
         std::memcpy(&payload[pos], &key_len, 4); pos += 4;
         std::memcpy(&payload[pos], &expire_at, 8); pos += 8;
-        std::memcpy(&payload[pos], key.data(), key.size());
+        if (key_len > 0) {
+            std::memcpy(&payload[pos], key.data(), key_len);
+            pos += key_len;
+        }
 
         uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
         uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
@@ -246,7 +264,7 @@ private:
 
             size_t payload_size = total_len - 4;
             uint32_t stored_crc = 0;
-            std::memcpy(&stored_crc, &body[payload_size], 4);
+            std::memcpy(&stored_crc, body.data() + payload_size, 4);
             uint32_t computed_crc = crc32_detail::compute_crc32(body.data(), payload_size);
 
             if (stored_crc != computed_crc) {
@@ -261,27 +279,27 @@ private:
             if (op == WalOp::PUT) {
                 if (static_cast<uint64_t>(pos) + 8 > static_cast<uint64_t>(payload_size)) break;
                 uint32_t key_len = 0, val_len = 0;
-                std::memcpy(&key_len, &body[pos], 4); pos += 4;
-                std::memcpy(&val_len, &body[pos], 4); pos += 4;
+                std::memcpy(&key_len, body.data() + pos, 4); pos += 4;
+                std::memcpy(&val_len, body.data() + pos, 4); pos += 4;
 
                 uint64_t needed = static_cast<uint64_t>(pos) + static_cast<uint64_t>(key_len) + static_cast<uint64_t>(val_len);
                 if (needed > static_cast<uint64_t>(payload_size)) break;
 
-                std::string key(reinterpret_cast<char*>(&body[pos]), key_len); pos += key_len;
-                std::string value(reinterpret_cast<char*>(&body[pos]), val_len);
+                std::string key(reinterpret_cast<const char*>(body.data() + pos), key_len); pos += key_len;
+                std::string value(reinterpret_cast<const char*>(body.data() + pos), val_len);
                 table_.put(key, value);
                 expiries_.erase(key);
 
             } else if (op == WalOp::DELETE) {
                 if (static_cast<uint64_t>(pos) + 8 > static_cast<uint64_t>(payload_size)) break;
                 uint32_t key_len = 0, val_len = 0;
-                std::memcpy(&key_len, &body[pos], 4); pos += 4;
-                std::memcpy(&val_len, &body[pos], 4); pos += 4;
+                std::memcpy(&key_len, body.data() + pos, 4); pos += 4;
+                std::memcpy(&val_len, body.data() + pos, 4); pos += 4;
 
                 uint64_t needed = static_cast<uint64_t>(pos) + static_cast<uint64_t>(key_len);
                 if (needed > static_cast<uint64_t>(payload_size)) break;
 
-                std::string key(reinterpret_cast<char*>(&body[pos]), key_len);
+                std::string key(reinterpret_cast<const char*>(body.data() + pos), key_len);
                 table_.remove(key);
                 expiries_.erase(key);
 
@@ -289,15 +307,15 @@ private:
                 if (static_cast<uint64_t>(pos) + 16 > static_cast<uint64_t>(payload_size)) break;
                 uint32_t key_len = 0, val_len = 0;
                 int64_t expire_at = 0;
-                std::memcpy(&key_len, &body[pos], 4); pos += 4;
-                std::memcpy(&val_len, &body[pos], 4); pos += 4;
-                std::memcpy(&expire_at, &body[pos], 8); pos += 8;
+                std::memcpy(&key_len, body.data() + pos, 4); pos += 4;
+                std::memcpy(&val_len, body.data() + pos, 4); pos += 4;
+                std::memcpy(&expire_at, body.data() + pos, 8); pos += 8;
 
                 uint64_t needed = static_cast<uint64_t>(pos) + static_cast<uint64_t>(key_len) + static_cast<uint64_t>(val_len);
                 if (needed > static_cast<uint64_t>(payload_size)) break;
 
-                std::string key(reinterpret_cast<char*>(&body[pos]), key_len); pos += key_len;
-                std::string value(reinterpret_cast<char*>(&body[pos]), val_len);
+                std::string key(reinterpret_cast<const char*>(body.data() + pos), key_len); pos += key_len;
+                std::string value(reinterpret_cast<const char*>(body.data() + pos), val_len);
                 table_.put(key, value);
                 expiries_[key] = expire_at;
 
@@ -305,13 +323,13 @@ private:
                 if (static_cast<uint64_t>(pos) + 12 > static_cast<uint64_t>(payload_size)) break;
                 uint32_t key_len = 0;
                 int64_t expire_at = 0;
-                std::memcpy(&key_len, &body[pos], 4); pos += 4;
-                std::memcpy(&expire_at, &body[pos], 8); pos += 8;
+                std::memcpy(&key_len, body.data() + pos, 4); pos += 4;
+                std::memcpy(&expire_at, body.data() + pos, 8); pos += 8;
 
                 uint64_t needed = static_cast<uint64_t>(pos) + static_cast<uint64_t>(key_len);
                 if (needed > static_cast<uint64_t>(payload_size)) break;
 
-                std::string key(reinterpret_cast<char*>(&body[pos]), key_len);
+                std::string key(reinterpret_cast<const char*>(body.data() + pos), key_len);
                 if (table_.contains(key)) {
                     expiries_[key] = expire_at;
                 }
@@ -497,7 +515,7 @@ public:
                     uint32_t key_len = static_cast<uint32_t>(key.size());
                     uint32_t val_len = static_cast<uint32_t>(value.size());
                     int64_t expire_at = it->second;
-                    size_t payload_size = 1 + 4 + 4 + 8 + key.size() + value.size();
+                    size_t payload_size = 1 + 4 + 4 + 8 + key_len + val_len;
 
                     std::vector<uint8_t> payload(payload_size);
                     size_t pos = 0;
@@ -505,8 +523,14 @@ public:
                     std::memcpy(&payload[pos], &key_len, 4); pos += 4;
                     std::memcpy(&payload[pos], &val_len, 4); pos += 4;
                     std::memcpy(&payload[pos], &expire_at, 8); pos += 8;
-                    std::memcpy(&payload[pos], key.data(), key.size()); pos += key.size();
-                    std::memcpy(&payload[pos], value.data(), value.size());
+                    if (key_len > 0) {
+                        std::memcpy(&payload[pos], key.data(), key_len);
+                        pos += key_len;
+                    }
+                    if (val_len > 0) {
+                        std::memcpy(&payload[pos], value.data(), val_len);
+                        pos += val_len;
+                    }
 
                     uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
                     uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
@@ -519,15 +543,21 @@ public:
                     // Write PUT record
                     uint32_t key_len = static_cast<uint32_t>(key.size());
                     uint32_t val_len = static_cast<uint32_t>(value.size());
-                    size_t payload_size = 1 + 4 + 4 + key.size() + value.size();
+                    size_t payload_size = 1 + 4 + 4 + key_len + val_len;
 
                     std::vector<uint8_t> payload(payload_size);
                     size_t pos = 0;
                     payload[pos++] = static_cast<uint8_t>(WalOp::PUT);
                     std::memcpy(&payload[pos], &key_len, 4); pos += 4;
                     std::memcpy(&payload[pos], &val_len, 4); pos += 4;
-                    std::memcpy(&payload[pos], key.data(), key.size()); pos += key.size();
-                    std::memcpy(&payload[pos], value.data(), value.size());
+                    if (key_len > 0) {
+                        std::memcpy(&payload[pos], key.data(), key_len);
+                        pos += key_len;
+                    }
+                    if (val_len > 0) {
+                        std::memcpy(&payload[pos], value.data(), val_len);
+                        pos += val_len;
+                    }
 
                     uint32_t crc = crc32_detail::compute_crc32(payload.data(), payload.size());
                     uint32_t total_len = static_cast<uint32_t>(payload_size + 4);
