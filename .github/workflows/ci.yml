@@ -48,8 +48,15 @@ jobs:
         ./build_san/test_ttl
         ./build_san/test_thread_safety
 
+    - name: ThreadSanitizer Build & Run (Thread Safety Test)
+      run: |
+        mkdir -p build_tsan
+        g++ -std=c++17 -Wall -Wextra -O1 -g -fsanitize=thread -I include tests/test_thread_safety.cpp -o build_tsan/test_thread_safety -pthread
+        ./build_tsan/test_thread_safety
+
     - name: Valgrind Memory Leak Analysis
       run: |
         valgrind --leak-check=full --error-exitcode=1 ./build/test_apexkv
         valgrind --leak-check=full --error-exitcode=1 ./build/test_wal
         valgrind --leak-check=full --error-exitcode=1 ./build/test_ttl
+
